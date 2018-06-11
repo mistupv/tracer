@@ -54,6 +54,7 @@ trace(InitialCall, Timeout, PidAnswer, Dir) ->
         spawn(
             fun() ->
                 put(modules_to_instrument, InstMod),
+                put(lambda, 0),
                 receive_loop(
                     0, 
                     [],
@@ -155,7 +156,9 @@ receive_loop(Current, Trace, Loaded, FunDict, PidMain, Timeout, Dir, TracingNode
                     %     {edd_trace, send_sent, Pid, {whereis(PidReceive), Msg, PosAndPP}};
                     {edd_trace, send_sent, Pid,  {PidReceive, Msg, _, PosAndPP}}  -> 
                         % io:format("SEND TRACED: ~p\n", [{ Pid,  {PidReceive, Msg, PosAndPP}}]),
-                        {edd_trace, send_sent, Pid, {PidReceive, Msg, PosAndPP}};
+                        % TODO: Check if lambda generation is ok here
+                        Lambda = get_lambda(),
+                        {edd_trace, {send_sent,Lambda}, Pid, {PidReceive, Msg, PosAndPP}};
                     % {edd_trace, send_sent, Pid, Params} -> 
                     %     io:format("SEND TRACED: ~p\n", [{ Pid,  Params}]),
                     %     TraceItem;
@@ -368,3 +371,8 @@ parse_expr(Func) ->
         _Err ->
             {error, parse_error}
     end.
+
+get_lambda() ->
+    Lambda = get(lambda),
+    put(lambda, Lambda + 1),
+    Lambda.
