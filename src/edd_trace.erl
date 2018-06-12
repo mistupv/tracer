@@ -154,11 +154,14 @@ receive_loop(Current, Trace, Loaded, FunDict, PidMain, Timeout, Dir, TracingNode
                     % {edd_trace, send_sent, Pid,  {PidReceive, Msg, _, PosAndPP}} when is_atom(PidReceive) -> 
                     %     % io:format("SEND TRACED: ~p\n", [{ Pid,  {PidReceive, Msg, PosAndPP}}]),
                     %     {edd_trace, send_sent, Pid, {whereis(PidReceive), Msg, PosAndPP}};
-                    {edd_trace, send_sent, Pid,  {PidReceive, Msg, _, PosAndPP}}  -> 
-                        % io:format("SEND TRACED: ~p\n", [{ Pid,  {PidReceive, Msg, PosAndPP}}]),
-                        % TODO: Check if lambda generation is ok here
+                    SendItem = {edd_trace, send_sent, Pid, {PidReceive, Msg, PosAndPP}} ->
                         Lambda = get_lambda(),
-                        {edd_trace, {send_sent,Lambda}, Pid, {PidReceive, Msg, PosAndPP}};
+                        {edd_trace, send_sent, Lambda, Pid, {PidReceive, Msg, PosAndPP}};
+                    % {edd_trace, send_sent, Pid,  {PidReceive, Msg, _, PosAndPP}}  -> 
+                    %     % io:format("SEND TRACED: ~p\n", [{ Pid,  {PidReceive, Msg, PosAndPP}}]),
+                    %     % TODO: Check if lambda generation is ok here
+                    %     Lambda = get_lambda(),
+                    %     {edd_trace, {send_sent,Lambda}, Pid, {PidReceive, Msg, PosAndPP}};
                     % {edd_trace, send_sent, Pid, Params} -> 
                     %     io:format("SEND TRACED: ~p\n", [{ Pid,  Params}]),
                     %     TraceItem;
