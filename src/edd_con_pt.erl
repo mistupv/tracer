@@ -574,7 +574,7 @@ inst_receive_clause(Clause, CurrentClause) ->
 	% NBody = 
 	% 	[SendContext | NOldBody],
 	NClause = 
-		erl_syntax:clause(Patterns, erl_syntax:clause_guard(Clause), NBody),
+		erl_syntax:clause([erl_syntax:tuple([erl_syntax:underscore() | Patterns])], erl_syntax:clause_guard(Clause), NBody),
 	{erl_syntax:set_ann(NClause, erl_syntax:get_ann(Clause) ), CurrentClause + 1} .
 
 erl_syntax_zip([], []) ->
