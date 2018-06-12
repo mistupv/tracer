@@ -144,10 +144,11 @@ inst_expr(T) ->
 		case erl_syntax:type(T) of 
 			receive_expr ->
 				Clauses = erl_syntax:receive_expr_clauses(T),
+				LambdaVar = free_named_var("LambdaRec"),
 				{NClauses,_} = 
 					lists:mapfoldl(
 						fun inst_receive_clause/2, 
-						1,
+						{1, LambdaVar},
 						Clauses),
 				% [io:format("~p\n", [erl_syntax:revert(NClause)]) || NClause <- NClauses ],
 				NReceive = 
@@ -514,7 +515,8 @@ inst_spawn(T, SpawnArgs) ->
 	BlockSpawn.
 
 
-inst_receive_clause(Clause, CurrentClause) ->
+inst_receive_clause(Clause, InstInfo) ->
+	{CurrentClause, LambdaVar} = InstInfo,
 	{ [VarMsg], Patterns} = 
 		args_assign("EDDMsg", erl_syntax:clause_patterns(Clause)),
 	% io:format("~p\n", [hd(erl_syntax:clause_body(Clause))]),
@@ -573,9 +575,11 @@ inst_receive_clause(Clause, CurrentClause) ->
 		[SendEvaluated] ++ BodyWOLast ++ [NLastExpr, SendResult, VarReceiveResultName],
 	% NBody = 
 	% 	[SendContext | NOldBody],
+	NPatterns = [erl_syntax:tuple([LambdaVar| Patterns])],
+
 	NClause = 
-		erl_syntax:clause([erl_syntax:tuple([erl_syntax:underscore() | Patterns])], erl_syntax:clause_guard(Clause), NBody),
-	{erl_syntax:set_ann(NClause, erl_syntax:get_ann(Clause) ), CurrentClause + 1} .
+		erl_syntax:clause(NPatterns, erl_syntax:clause_guard(Clause), NBody),
+	{erl_syntax:set_ann(NClause, erl_syntax:get_ann(Clause) ), {LambdaVar, CurrentClause + 1}} .
 
 erl_syntax_zip([], []) ->
 	[];
