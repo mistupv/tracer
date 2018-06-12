@@ -472,23 +472,24 @@ inst_send(T, SendArgs) ->
 			tl(VarArgs)
 		],
 
+	SndVarArg = lists:nth(2, VarArgs),
+
 	SendSend = 
 		build_send_trace(
 			send_sent, 
 			VarArgsToSend ++ pos_and_pp(T)), 	
 
-	NT = 
-		build_send_par(
+	{RecLambda, LambdaVar} =
+		build_rec_lambda(),
+
+	SendWithLambda =
+		build_send_lambda(
 			hd(VarArgs),
-			tl(VarArgs)),
-		% erl_syntax:infix_expr(
-		% 	lists:nth(1, VarArgs), 
-		% 	erl_syntax:operator('!'), 
-		% 	lists:nth(2, VarArgs)),
-
+			SndVarArg,
+			LambdaVar),
+ 
 	BlockSend = 
-		erl_syntax:block_expr(StoreArgs ++ [NT, SendSend, lists:nth(2, VarArgs)]),
-
+		erl_syntax:block_expr(StoreArgs ++ [SendSend, RecLambda, SendWithLambda, SndVarArg]),
 	BlockSend.
 
 inst_spawn(T, SpawnArgs) ->
@@ -666,6 +667,15 @@ build_send_load(Module) ->
 				[])
 	 	] ).
 
+build_send_lambda(Pid, Msg, Lambda) ->
+	build_send_par(
+		Pid,
+		[erl_syntax:tuple([
+			                 Lambda,
+											 Msg
+											])
+		]).
+
 build_store_fun(Name, FunInfo) -> 
 	build_send(
 		[
@@ -691,6 +701,29 @@ build_receive_load() ->
 			)
 		]
 	) .
+
+build_rec_lambda() ->
+	LambdaVar = free_named_var("Lambda"),
+	RecExpr =
+		erl_syntax:receive_expr(
+			[
+				erl_syntax:clause(
+					[
+					 erl_syntax:tuple(
+						  [
+						   erl_syntax:atom(lambda),
+						   LambdaVar
+						  ])
+					],
+					[],
+					[erl_syntax:atom(ok)]
+					% erl_syntax:application(
+					% 	erl_syntax:atom(io) , 
+					% 	erl_syntax:atom(format), 
+					% 	[erl_syntax:string("RECIBIDO \n")])
+				)
+			]),
+	{RecExpr, LambdaVar}.
 
 pos_and_pp(T, [{file_name,Fname}, {module_name,MName}]) ->
 	% io:format("~p\n", [erl_syntax:get_attrs(T)]),

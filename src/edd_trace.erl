@@ -156,6 +156,7 @@ receive_loop(Current, Trace, Loaded, FunDict, PidMain, Timeout, Dir, TracingNode
                     %     {edd_trace, send_sent, Pid, {whereis(PidReceive), Msg, PosAndPP}};
                     SendItem = {edd_trace, send_sent, Pid, {PidReceive, Msg, PosAndPP}} ->
                         Lambda = get_lambda(),
+                        Pid ! {lambda, Lambda},
                         {edd_trace, send_sent, Lambda, Pid, {PidReceive, Msg, PosAndPP}};
                     % {edd_trace, send_sent, Pid,  {PidReceive, Msg, _, PosAndPP}}  -> 
                     %     % io:format("SEND TRACED: ~p\n", [{ Pid,  {PidReceive, Msg, PosAndPP}}]),
