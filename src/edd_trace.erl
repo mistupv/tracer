@@ -133,7 +133,8 @@ trace(InitialCall, Timeout, PidAnswer, Dir) ->
     % io:format("Initial PID: ~p\n",[PidCall]),
     % Trace,
     % ok.
-    PidAnswer!{Trace, DictFun, PidCall}.
+    % PidAnswer!{Trace, DictFun, PidCall}.
+    PidAnswer!{Trace}.
 
 receive_loop(Current, Trace, Loaded, FunDict, PidMain, Timeout, Dir, TracingNode) ->
     % io:format("Itera\n"),
