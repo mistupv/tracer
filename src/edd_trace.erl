@@ -31,9 +31,7 @@
 
 trace(InitialCall, Timeout, PidAnswer, Dir) -> 
     ModName = get_mod_name(InitialCall),
-    % Host = 
-    %     list_to_atom(net_adm:localhost()),
-    % io:format("~p\n", [Host]),
+    put(modules_to_instrument,[]),
     {ok, TracingNode} = 
         slave:start(
             list_to_atom(net_adm:localhost()), 
@@ -172,8 +170,6 @@ receive_loop(Current, Trace, Loaded, FunDict, PidMain, Timeout, Dir, TracingNode
                     _ -> 
                         TraceItem
                 end,
-            % io:format("Trace ~p\n", [TraceItem]),
-            % io:format("Type ~p\n", [Type]),
             receive_loop(
                 Current + 1, 
                 [{Current,NTraceItem} | Trace],
