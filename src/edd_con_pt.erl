@@ -367,47 +367,47 @@ inst_fun_clauses(Clauses, FunId) ->
 					erl_syntax_lib:map(
 						fun inst_expr/1, Clause )),
 			% io:format("~p: ~p\n", [self(),get(module_name)]),
-			{ParValues, NPars} = 
-				args_assign("EDDFunPar", erl_syntax:clause_patterns(Clause)),
-			VarsContextStart = 
-				get_ann_info(env, hd(erl_syntax:clause_body(Clause))),
-			ContextStart = 
-				build_dict_var(VarsContextStart),
-			CallRep = 
-					[get_ann_info(module_name, Clause),
-					 FunId] 
-					 % ), 
-					 ++ [ erl_syntax:list(ParValues)], 
-			SendCallStart = 
-				build_send_trace(start_call, [erl_syntax:tuple(CallRep), ContextStart] ++ pos_and_pp(Clause)), 
-			LastExpr = 
-				lists:last(NBody0),
-			BodyWOLast =
-				lists:droplast(NBody0),
-			VarFunResult = free_named_var("EDDResultFun"),
-			VarsContextEnd = 
-				get_ann_info(env, lists:last(erl_syntax:clause_body(Clause))),
-			ContextEnd = 
-				build_dict_var(VarsContextEnd),
-			NLastExpr = 
-				erl_syntax:match_expr(
-					VarFunResult, 
-					LastExpr),
-			SendResult =
-				build_send_trace(end_call, [erl_syntax:tuple(CallRep), VarFunResult, ContextEnd]), 
-			NOldBody = 
-				BodyWOLast ++ [NLastExpr, SendResult, VarFunResult],
+			% {ParValues, NPars} = 
+			% 	args_assign("EDDFunPar", erl_syntax:clause_patterns(Clause)),
+			% VarsContextStart = 
+			% 	get_ann_info(env, hd(erl_syntax:clause_body(Clause))),
+			% ContextStart = 
+			% 	build_dict_var(VarsContextStart),
+			% CallRep = 
+			% 		[get_ann_info(module_name, Clause),
+			% 		 FunId] 
+			% 		 % ), 
+			% 		 ++ [ erl_syntax:list(ParValues)], 
+			% SendCallStart = 
+			% 	build_send_trace(start_call, [erl_syntax:tuple(CallRep), ContextStart] ++ pos_and_pp(Clause)), 
+			% LastExpr = 
+			% 	lists:last(NBody0),
+			% BodyWOLast =
+			% 	lists:droplast(NBody0),
+			% VarFunResult = free_named_var("EDDResultFun"),
+			% VarsContextEnd = 
+			% 	get_ann_info(env, lists:last(erl_syntax:clause_body(Clause))),
+			% ContextEnd = 
+			% 	build_dict_var(VarsContextEnd),
+			% NLastExpr = 
+			% 	erl_syntax:match_expr(
+			% 		VarFunResult, 
+			% 		LastExpr),
+			% SendResult =
+			% 	build_send_trace(end_call, [erl_syntax:tuple(CallRep), VarFunResult, ContextEnd]), 
+			% NOldBody = 
+			% 	BodyWOLast ++ [NLastExpr, SendResult, VarFunResult],
 			% Salida = 
 			% 	erl_syntax:application(
 			% 		erl_syntax:atom(io) , 
 			% 		erl_syntax:atom(format), 
 			% 		[erl_syntax:string("entra " ++ erl_syntax:atom_literal(get(module_name)) ++ " " ++ erl_syntax:atom_literal(erl_syntax:function_name(T)) ++ "\n")]),
-			NBody = 
-				[SendCallStart | NOldBody],
+			% NBody = 
+			% 	[SendCallStart | NOldBody],
 		 	erl_syntax:clause(
-					NPars, 
+					erl_syntax:clause_patterns(Clause), 
 					erl_syntax:clause_guard(Clause), 
-					NBody)
+					NBody0)
 		 end
 	 || Clause <- Clauses].
 
