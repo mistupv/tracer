@@ -141,38 +141,20 @@ receive_loop(Current, Trace, Loaded, FunDict, PidMain, Timeout, Dir, TracingNode
         TraceItem = {edd_trace, _, _, _} ->
             NTraceItem = 
                 case TraceItem of 
-                    % {edd_trace, send_sent, Pid,  {PidReceive, Msg, PosAndPP}} when is_atom(PidReceive) -> 
-                    %     % case PidReceive of 
-                    %     %     undefined ->
-                    %     %         io:format("SEND TRACED: ~p\n", [{ Pid,  {PidReceive, Msg, PosAndPP}}]);
-                    %     %     _ ->
-                    %     %         ok
-                    %     % end,
-                    %     {edd_trace, send_sent, Pid, {whereis(PidReceive), Msg, PosAndPP}};
-                    % {edd_trace, send_sent, Pid,  {PidReceive, Msg, _, PosAndPP}} when is_atom(PidReceive) -> 
-                    %     % io:format("SEND TRACED: ~p\n", [{ Pid,  {PidReceive, Msg, PosAndPP}}]),
-                    %     {edd_trace, send_sent, Pid, {whereis(PidReceive), Msg, PosAndPP}};
-                    SendItem = {edd_trace, send_sent, Pid, {PidReceive, Msg, PosAndPP}} ->
+                    {edd_trace, send_sent, Pid, _} ->
                         Lambda = get_lambda(),
                         Pid ! {lambda, Lambda},
-                        {edd_trace, send_sent, Lambda, Pid, {PidReceive, Msg, PosAndPP}};
-                    % {edd_trace, send_sent, Pid,  {PidReceive, Msg, _, PosAndPP}}  -> 
-                    %     % io:format("SEND TRACED: ~p\n", [{ Pid,  {PidReceive, Msg, PosAndPP}}]),
-                    %     % TODO: Check if lambda generation is ok here
-                    %     Lambda = get_lambda(),
-                    %     {edd_trace, {send_sent,Lambda}, Pid, {PidReceive, Msg, PosAndPP}};
-                    % {edd_trace, send_sent, Pid, Params} -> 
-                    %     io:format("SEND TRACED: ~p\n", [{ Pid,  Params}]),
-                    %     TraceItem;
-                    {edd_trace, made_spawn, Pid,  {{A1, A2, A3, _}, Res, PosAndPP}} -> 
-                        % io:format("made_spawn: ~p\n", [{Args, Res, PosAndPP}]),
-                        {edd_trace, made_spawn, Pid,  {{A1, A2, A3}, Res, PosAndPP}};
+                        {Pid, send, Lambda};
+                    {edd_trace, made_spawn, Pid, {SpawnPid}} ->
+                        {Pid, spawn, SpawnPid};
+                    {edd_trace,receive_evaluated, Pid, {Lambda}} ->
+                        {Pid, 'receive', Lambda};
                     _ -> 
                         TraceItem
                 end,
             receive_loop(
                 Current + 1, 
-                [{Current,NTraceItem} | Trace],
+                [NTraceItem | Trace],
                 Loaded, FunDict, PidMain, Timeout, Dir, TracingNode);
         {edd_load_module, Module, PidAnswer} ->
             % io:format("Load module " ++ atom_to_list(Module) ++ "\n"),
