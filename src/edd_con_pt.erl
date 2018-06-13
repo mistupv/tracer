@@ -551,28 +551,30 @@ inst_receive_clause(Clause, InstInfo) ->
 	SendEvaluated =
 		build_send_trace(
 			receive_evaluated, 
-			[VarMsg, ContextStart, Bindings, erl_syntax:integer(CurrentClause)]), 
+			[LambdaVar]),
+			%[VarMsg, ContextStart, Bindings, erl_syntax:integer(CurrentClause)]),
 
-	LastExpr = 
-		lists:last(erl_syntax:clause_body(Clause)),
-	BodyWOLast =
-		lists:droplast(erl_syntax:clause_body(Clause)),
-	VarReceiveResultName = free_named_var("EDDResultReceive"),
-	NLastExpr = 
-		erl_syntax:match_expr(
-			VarReceiveResultName , 
-			LastExpr),
-	VarsContextEnd = 
-		get_ann_info(env,lists:last(erl_syntax:clause_body(Clause))),
-	ContextEnd = 
-		build_dict_var(VarsContextEnd),
-	SendResult =
-		build_send_trace(
-			receive_finished, 
-			[VarReceiveResultName, ContextEnd]), 
+	% LastExpr = 
+	% 	lists:last(erl_syntax:clause_body(Clause)),
+	% BodyWOLast =
+	% 	lists:droplast(erl_syntax:clause_body(Clause)),
+	% VarReceiveResultName = free_named_var("EDDResultReceive"),
+	% NLastExpr = 
+	% 	erl_syntax:match_expr(
+	% 		VarReceiveResultName , 
+	% 		LastExpr),
+	% VarsContextEnd = 
+	% 	get_ann_info(env,lists:last(erl_syntax:clause_body(Clause))),
+	% ContextEnd = 
+	% 	build_dict_var(VarsContextEnd),
+	% SendResult =
+	% 	build_send_trace(
+	% 		receive_finished, 
+	% 		[VarReceiveResultName, ContextEnd]), 
 	% NOldBody = 
 	NBody = 
-		[SendEvaluated] ++ BodyWOLast ++ [NLastExpr, SendResult, VarReceiveResultName],
+		[SendEvaluated] ++ erl_syntax:clause_body(Clause),
+	% [SendEvaluated] ++ BodyWOLast ++ [NLastExpr, SendResult, VarReceiveResultName],
 	% NBody = 
 	% 	[SendContext | NOldBody],
 	NPatterns = [erl_syntax:tuple([LambdaVar| Patterns])],
