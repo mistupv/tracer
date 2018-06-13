@@ -156,21 +156,7 @@ inst_expr(T) ->
 						NClauses, 
 						erl_syntax:receive_expr_timeout(T), 
 						erl_syntax:receive_expr_action(T)),
-				VarsContext = 
-					get_ann_info(env, T),
-				Context = 
-					build_dict_var(VarsContext),
-				% io:format("PP: ~p\n", [erl_syntax:tuple(pos_and_pp(T))]),
-				SendReceive = 
-						build_send_trace(
-							receive_reached, 
-							[Context,
-							erl_syntax:tuple(pos_and_pp(T))]), 
-							% pos_and_pp(T)),
-				BlockReceive = 
-					erl_syntax:block_expr([SendReceive, NReceive]),
-				% io:format("~p\n",[BlockReceive]),
-				BlockReceive;
+				NReceive;
 			infix_expr -> 
 				case erl_syntax:operator_name(erl_syntax:infix_expr_operator(T)) of 
 					'!' ->
