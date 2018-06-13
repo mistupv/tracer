@@ -503,7 +503,8 @@ inst_spawn(T, SpawnArgs) ->
 		args_assign("EDDSpawnArg", SpawnArgs),
 
 	SendSpawn = 
-		build_send_trace(made_spawn, [erl_syntax:tuple(VarArgs) ,VarReceiveResult] ++ pos_and_pp(T)), 
+		% build_send_trace(made_spawn, [erl_syntax:tuple(VarArgs) ,VarReceiveResult] ++ pos_and_pp(T)), 
+		build_send_trace(made_spawn, [VarReceiveResult]),
 
 	SpawnCall = 
 		erl_syntax:application(erl_syntax:application_operator(T), VarArgs), 
@@ -587,48 +588,6 @@ erl_syntax_zip([], []) ->
 	[];
 erl_syntax_zip([H1 | T1], [H2 | T2]) ->
 	[ erl_syntax:tuple([H1, H2]) | erl_syntax_zip(T1, T2)]. 
-
-% ann_expr(T, VarAcc) -> 
-% 	% io:format("~p\n", [erl_syntax:revert(T)]),
-% 	% io:format("~p\n", [erl_syntax:type(T)]),
-% 	case erl_syntax:type(T) of 
-% 		receive_expr ->
-% 			Clauses = erl_syntax:receive_expr_clauses(T),
-% 			NClauses = 
-% 				lists:map(
-% 					fun(Clause) -> 
-% 						ann_clause(Clause, VarAcc) 
-% 					end, 
-% 					Clauses),
-% 			NReceive0 = 
-% 				erl_syntax:receive_expr(
-% 					NClauses, 
-% 					erl_syntax:receive_expr_timeout(T), 
-% 					erl_syntax:receive_expr_action(T)),
-% 			NReceive = 
-% 				erl_syntax:set_pos(NReceive0,erl_syntax:get_pos(T)),
-% 			{erl_syntax:add_ann(lists:usort(VarAcc), NReceive),
-% 			 VarAcc ++ sets:to_list(erl_syntax_lib:variables(T))};
-% 		_ ->
-% 			{erl_syntax:add_ann(lists:usort(VarAcc), T), 
-% 			 VarAcc ++ sets:to_list(erl_syntax_lib:variables(T))}
-% 	end.
-
-% ann_clause(Clause, PrevVars) ->
-% 	Patterns = 
-% 		erl_syntax:clause_patterns(Clause),
-% 	VarsBody = 
-% 		lists:usort(
-% 			PrevVars 
-% 			++ vars_patterns(Patterns)),
-% 	NBody = 
-% 		element(1, 
-% %TODO: I think that this is useless since the mapping is bottom-up, so it should be already annotated.
-% 			lists:mapfoldl(
-% 				fun ann_expr/2,
-% 				VarsBody,
-% 				erl_syntax:clause_body(Clause))),
-% 	erl_syntax:clause(Patterns, erl_syntax:clause_guard(Clause), NBody).
 
 build_dict_var(Vars) ->
 	erl_syntax:list(
