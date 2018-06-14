@@ -569,7 +569,7 @@ inst_receive_clause(Clause, InstInfo) ->
 
 	NClause = 
 		erl_syntax:clause(NPatterns, erl_syntax:clause_guard(Clause), NBody),
-	{erl_syntax:set_ann(NClause, erl_syntax:get_ann(Clause) ), {LambdaVar, CurrentClause + 1}} .
+	{erl_syntax:set_ann(NClause, erl_syntax:get_ann(Clause) ), {CurrentClause + 1, LambdaVar}} .
 
 erl_syntax_zip([], []) ->
 	[];
