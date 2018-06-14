@@ -44,7 +44,7 @@ trace(InitialCall, Timeout, PidAnswer, Dir) ->
     instrument_and_reload(ModName, Dir, TracingNode),
     PidMain = self(),
     PidCall = execute_call(InitialCall, self(), Dir, TracingNode),
-    RunningDict = [{PidCall, true}],
+    RunningProcs = [PidCall],
     % io:format("PIDCALL: ~p\n", [PidCall]),
     TimeoutServer = Timeout,
     InstMod = 
@@ -63,7 +63,7 @@ trace(InitialCall, Timeout, PidAnswer, Dir) ->
                     TimeoutServer, 
                     Dir, 
                     TracingNode,
-                    RunningDict)
+                    RunningProcs)
             end),
     register(edd_tracer, PidTrace),
     PidCall!start,
@@ -71,9 +71,8 @@ trace(InitialCall, Timeout, PidAnswer, Dir) ->
         {result,Result} ->
             % io:format("TimeoutServer: ~p\n", [TimeoutServer]),
             receive 
-                idle ->
-                    % io:format("Recibe IDLE\n"),
-                    ok
+                all_done -> ok;
+                idle -> ok
             end,
             io:format("\nExecution result: ~p\n",[Result])
     after 
@@ -138,7 +137,7 @@ trace(InitialCall, Timeout, PidAnswer, Dir) ->
     % PidAnswer!{Trace, DictFun, PidCall}.
     PidAnswer!{Trace}.
 
-receive_loop(Current, Trace, Loaded, FunDict, PidMain, Timeout, Dir, TracingNode, RunningDict) ->
+receive_loop(Current, Trace, Loaded, FunDict, PidMain, Timeout, Dir, TracingNode, RunningProcs) ->
     % io:format("Itera\n"),
     receive 
         TraceItem = {edd_trace, _, _, _} ->
@@ -155,17 +154,17 @@ receive_loop(Current, Trace, Loaded, FunDict, PidMain, Timeout, Dir, TracingNode
                     _ -> 
                         TraceItem
                 end,
-            NRunningDict =
+            NRunningProcs =
                 case TraceItem of
-                    {edd_trace, made_spawn, _, {SP}} ->
-                      [{SP, true}|RunningDict];
+                    {edd_trace, made_spawn, _, {SpPid}} ->
+                      [SpPid | RunningProcs];
                     _ ->
-                        RunningDict
+                        RunningProcs
                 end,
             receive_loop(
                 Current + 1, 
                 [NTraceItem | Trace],
-                Loaded, FunDict, PidMain, Timeout, Dir, TracingNode, NRunningDict);
+                Loaded, FunDict, PidMain, Timeout, Dir, TracingNode, NRunningProcs);
         {edd_load_module, Module, PidAnswer} ->
             % io:format("Load module " ++ atom_to_list(Module) ++ "\n"),
             NLoaded = 
@@ -178,7 +177,7 @@ receive_loop(Current, Trace, Loaded, FunDict, PidMain, Timeout, Dir, TracingNode
                        PidAnswer!loaded,
                        [Module | Loaded] 
                 end, 
-            receive_loop(Current, Trace, NLoaded, FunDict, PidMain, Timeout, Dir, TracingNode, RunningDict);
+            receive_loop(Current, Trace, NLoaded, FunDict, PidMain, Timeout, Dir, TracingNode, RunningProcs);
         {edd_store_fun, Name, FunInfo} ->
             NFunDict = 
                 case dict:is_key(Name, FunDict) of 
@@ -187,18 +186,26 @@ receive_loop(Current, Trace, Loaded, FunDict, PidMain, Timeout, Dir, TracingNode
                     false ->
                         dict:append(Name, FunInfo, FunDict) 
                 end, 
-            receive_loop(Current, Trace, Loaded, NFunDict, PidMain, Timeout, Dir, TracingNode, RunningDict);
+            receive_loop(Current, Trace, Loaded, NFunDict, PidMain, Timeout, Dir, TracingNode, RunningProcs);
+        {edd_proc_done, Pid} ->
+            NRunningProcs = lists:delete(Pid, RunningProcs),
+            % TODO: Check also if there are no messages left in the mailbox
+            case NRunningProcs of
+                [] -> PidMain ! all_done;
+                _ -> continue
+            end,
+            receive_loop(Current, Trace, Loaded, FunDict, PidMain, Timeout, Dir, TracingNode, NRunningProcs);   
         stop -> 
             PidMain!{trace, Trace},
             PidMain!{loaded, Loaded},
             PidMain!{fun_dict, FunDict};
         Other -> 
             io:format("Untracked msg ~p\n", [Other]),
-            receive_loop(Current, Trace, Loaded, FunDict, PidMain, Timeout, Dir, TracingNode, RunningDict)
+            receive_loop(Current, Trace, Loaded, FunDict, PidMain, Timeout, Dir, TracingNode, RunningProcs)
     after 
         Timeout ->
             PidMain!idle,
-            receive_loop(Current, Trace, Loaded, FunDict, PidMain, Timeout, Dir, TracingNode, RunningDict)
+            receive_loop(Current, Trace, Loaded, FunDict, PidMain, Timeout, Dir, TracingNode, RunningProcs)
     end.
 
 send_module(TracingNode, Module, Dir) ->
