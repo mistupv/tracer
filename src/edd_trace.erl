@@ -26,10 +26,25 @@
 
 -module(edd_trace).
 
--export([trace/4]).
+-export([trace/2, trace/3]).
 
+trace(InitialCall, PidAnswer) ->
+    trace(InitialCall, PidAnswer, []).
 
-trace(InitialCall, Timeout, PidAnswer, Dir) -> 
+trace(InitialCall, PidAnswer, Opts) ->
+    NOpts0 =
+        case proplists:is_defined(timeout, Opts) of
+            true -> ok;
+            false -> [{timeout, 1000} | Opts]
+        end,
+    NOpts1 =
+        case proplists:is_defined(dir, NOpts0) of
+            true -> ok;
+            false -> [{dir, "."} | NOpts0]
+        end,
+    trace_1(InitialCall, PidAnswer, NOpts1).
+
+trace_1(InitialCall, PidAnswer, Opts) ->
     ModName = get_mod_name(InitialCall),
     put(modules_to_instrument,[]),
     {ok, TracingNode} = 
@@ -37,6 +52,8 @@ trace(InitialCall, Timeout, PidAnswer, Dir) ->
             list_to_atom(net_adm:localhost()), 
             edd_tracing, 
             "-setcookie edd_cookie"),
+    Timeout = proplists:get_value(timeout, Opts),
+    Dir     = proplists:get_value(dir,     Opts),
     % io:format("~p\n", [SO]),
     % io:format("~p\n~p\n", [ModName, Dir]),
     % OriginalLibCode = 
@@ -221,7 +238,7 @@ send_module(TracingNode, Module, Dir) ->
     ok.
 
 
-execute_call(Call, PidParent, Dir, TracingNode) ->
+execute_call(Call, PidParent, _Dir, TracingNode) ->
     % spawn(
     %     TracingNode,
     send_module(TracingNode, ?MODULE, filename:absname(filename:dirname(code:which(?MODULE)) ++ "/..") ++ "/src"),
@@ -306,7 +323,7 @@ instrument_and_reload_gen(ModName, Dir, CompileOpts, Msg, TracingNode) ->
             ,ok
     end.
 
-instrument_and_reload_sticky(ModName, UserDir, CompileOpts, Msg, TracingNode) ->
+instrument_and_reload_sticky(ModName, _UserDir, CompileOpts, Msg, TracingNode) ->
     LibDir = 
         code:lib_dir(stdlib, src),
     BeamDir = 
