@@ -44,6 +44,7 @@ trace(InitialCall, Timeout, PidAnswer, Dir) ->
     instrument_and_reload(ModName, Dir, TracingNode),
     PidMain = self(),
     PidCall = execute_call(InitialCall, self(), Dir, TracingNode),
+    RunningDict = [{PidCall, true}],
     % io:format("PIDCALL: ~p\n", [PidCall]),
     TimeoutServer = Timeout,
     InstMod = 
@@ -61,7 +62,8 @@ trace(InitialCall, Timeout, PidAnswer, Dir) ->
                     PidMain, 
                     TimeoutServer, 
                     Dir, 
-                    TracingNode)
+                    TracingNode,
+                    RunningDict)
             end),
     register(edd_tracer, PidTrace),
     PidCall!start,
@@ -86,7 +88,7 @@ trace(InitialCall, Timeout, PidAnswer, Dir) ->
             {trace,Trace0} ->
                 lists:reverse(Trace0)
         end,
-    Loaded = 
+    % Loaded = % Commented to avoid warning
         receive 
             {loaded,Loaded0} ->
                 Loaded0
@@ -119,7 +121,7 @@ trace(InitialCall, Timeout, PidAnswer, Dir) ->
      % [ code:load_binary(Mod, Filename, Binary) || {Mod, Binary, Filename}  <- OriginalLibCode],
     % [undo_instrument_and_reload(Mod, Dir) || Mod <- Loaded, not(lists:member( Mod, [gen_server, gen_fsm, supervisor, proc_lib, gen]))],
     % [undo_instrument_and_reload(Mod, Dir) || Mod <- Loaded],
-    DictFun = 
+    % DictFun = % Commented to avoid warning
         receive 
             {fun_dict,FunDict0} ->
                 FunDict0
@@ -136,11 +138,11 @@ trace(InitialCall, Timeout, PidAnswer, Dir) ->
     % PidAnswer!{Trace, DictFun, PidCall}.
     PidAnswer!{Trace}.
 
-receive_loop(Current, Trace, Loaded, FunDict, PidMain, Timeout, Dir, TracingNode) ->
+receive_loop(Current, Trace, Loaded, FunDict, PidMain, Timeout, Dir, TracingNode, RunningDict) ->
     % io:format("Itera\n"),
     receive 
         TraceItem = {edd_trace, _, _, _} ->
-            NTraceItem = 
+            NTraceItem =
                 case TraceItem of 
                     {edd_trace, send_sent, Pid, _} ->
                         Lambda = get_lambda(),
@@ -153,10 +155,17 @@ receive_loop(Current, Trace, Loaded, FunDict, PidMain, Timeout, Dir, TracingNode
                     _ -> 
                         TraceItem
                 end,
+            NRunningDict =
+                case TraceItem of
+                    {edd_trace, made_spawn, _, {SP}} ->
+                      [{SP, true}|RunningDict];
+                    _ ->
+                        RunningDict
+                end,
             receive_loop(
                 Current + 1, 
                 [NTraceItem | Trace],
-                Loaded, FunDict, PidMain, Timeout, Dir, TracingNode);
+                Loaded, FunDict, PidMain, Timeout, Dir, TracingNode, NRunningDict);
         {edd_load_module, Module, PidAnswer} ->
             % io:format("Load module " ++ atom_to_list(Module) ++ "\n"),
             NLoaded = 
@@ -169,7 +178,7 @@ receive_loop(Current, Trace, Loaded, FunDict, PidMain, Timeout, Dir, TracingNode
                        PidAnswer!loaded,
                        [Module | Loaded] 
                 end, 
-            receive_loop(Current, Trace, NLoaded, FunDict, PidMain, Timeout, Dir, TracingNode);
+            receive_loop(Current, Trace, NLoaded, FunDict, PidMain, Timeout, Dir, TracingNode, RunningDict);
         {edd_store_fun, Name, FunInfo} ->
             NFunDict = 
                 case dict:is_key(Name, FunDict) of 
@@ -178,18 +187,18 @@ receive_loop(Current, Trace, Loaded, FunDict, PidMain, Timeout, Dir, TracingNode
                     false ->
                         dict:append(Name, FunInfo, FunDict) 
                 end, 
-            receive_loop(Current, Trace, Loaded, NFunDict, PidMain, Timeout, Dir, TracingNode);
+            receive_loop(Current, Trace, Loaded, NFunDict, PidMain, Timeout, Dir, TracingNode, RunningDict);
         stop -> 
             PidMain!{trace, Trace},
             PidMain!{loaded, Loaded},
             PidMain!{fun_dict, FunDict};
         Other -> 
             io:format("Untracked msg ~p\n", [Other]),
-            receive_loop(Current, Trace, Loaded, FunDict, PidMain, Timeout, Dir, TracingNode)
+            receive_loop(Current, Trace, Loaded, FunDict, PidMain, Timeout, Dir, TracingNode, RunningDict)
     after 
         Timeout ->
             PidMain!idle,
-            receive_loop(Current, Trace, Loaded, FunDict, PidMain, Timeout, Dir, TracingNode)
+            receive_loop(Current, Trace, Loaded, FunDict, PidMain, Timeout, Dir, TracingNode, RunningDict)
     end.
 
 send_module(TracingNode, Module, Dir) ->
