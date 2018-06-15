@@ -74,8 +74,7 @@ trace_1(InitialCall, PidAnswer, Opts) ->
                 receive_loop(
                     0, 
                     [],
-                    [ModName], 
-                    dict:new(), 
+                    [ModName],
                     PidMain, 
                     TimeoutServer, 
                     Dir, 
@@ -106,52 +105,9 @@ trace_1(InitialCall, PidAnswer, Opts) ->
             {loaded,Loaded0} ->
                 Loaded0
         end,
-    % [begin 
-    %     {Mod, Binary, Filename} = 
-    %         code:get_object_code(Mod),
-    %     io:format("~p, ~s\n", [Mod, Filename]),
-    %     code:load_binary(Mod, Filename, Binary)
-    % end
-    % || Mod <- Loaded, lists:member( Mod, [gen_server])],
-    % io:format("PASA\n"),
-    % [begin 
-    %     {Mod, Binary, Filename} = 
-    %         code:get_object_code(Mod),
-    %     io:format("~p, ~s\n", [Mod, Filename]),
-    %     code:load_binary(Mod, Filename, Binary)
-    % end
-    % || Mod <- Loaded, lists:member( Mod, [supervisor])],
-    % io:format("PASA\n"),
-    % [begin 
-    %     {Mod, Binary, Filename} = 
-    %         code:get_object_code(Mod),
-    %     io:format("~p, ~s\n", [Mod, Filename]),
-    %     code:load_binary(Mod, Filename, Binary)
-    % end
-    % || Mod <- Loaded, lists:member( Mod, [gen_fsm, proc_lib, gen])],
-    % [erlang:purge_module(Mod) || Mod <- Loaded, lists:member( Mod, [gen_fsm, supervisor, proc_lib, gen])],
-
-     % [ code:load_binary(Mod, Filename, Binary) || {Mod, Binary, Filename}  <- OriginalLibCode],
-    % [undo_instrument_and_reload(Mod, Dir) || Mod <- Loaded, not(lists:member( Mod, [gen_server, gen_fsm, supervisor, proc_lib, gen]))],
-    % [undo_instrument_and_reload(Mod, Dir) || Mod <- Loaded],
-    % DictFun = % Commented to avoid warning
-        receive 
-            {fun_dict,FunDict0} ->
-                FunDict0
-        end,
-    % unregister(edd_tracer),
-    % io:format("~p\n",[dict:to_list(DictFun)]),
-
-    % build_graph(Trace, DictFun, PidCall), 
-
-    % io:format("~p\n",[dict:to_list(DictTraces)]),
-    % io:format("Initial PID: ~p\n",[PidCall]),
-    % Trace,
-    % ok.
-    % PidAnswer!{Trace, DictFun, PidCall}.
     PidAnswer!{Trace}.
 
-receive_loop(Current, Trace, Loaded, FunDict, PidMain, Timeout, Dir, TracingNode, RunningProcs) ->
+receive_loop(Current, Trace, Loaded, PidMain, Timeout, Dir, TracingNode, RunningProcs) ->
     % io:format("Itera\n"),
     receive 
         TraceItem = {edd_trace, _, _, _} ->
@@ -192,7 +148,7 @@ receive_loop(Current, Trace, Loaded, FunDict, PidMain, Timeout, Dir, TracingNode
             receive_loop(
                 Current + 1, 
                 NTrace,
-                Loaded, FunDict, PidMain, Timeout, Dir, TracingNode, NRunningProcs);
+                Loaded, PidMain, Timeout, Dir, TracingNode, NRunningProcs);
         {edd_load_module, Module, PidAnswer} ->
             % io:format("Load module " ++ atom_to_list(Module) ++ "\n"),
             NLoaded = 
@@ -205,27 +161,17 @@ receive_loop(Current, Trace, Loaded, FunDict, PidMain, Timeout, Dir, TracingNode
                        PidAnswer!loaded,
                        [Module | Loaded] 
                 end, 
-            receive_loop(Current, Trace, NLoaded, FunDict, PidMain, Timeout, Dir, TracingNode, RunningProcs);
-        {edd_store_fun, Name, FunInfo} ->
-            NFunDict = 
-                case dict:is_key(Name, FunDict) of 
-                    true ->
-                        FunDict;
-                    false ->
-                        dict:append(Name, FunInfo, FunDict) 
-                end, 
-            receive_loop(Current, Trace, Loaded, NFunDict, PidMain, Timeout, Dir, TracingNode, RunningProcs);
+            receive_loop(Current, Trace, NLoaded, PidMain, Timeout, Dir, TracingNode, RunningProcs);
         stop -> 
             PidMain!{trace, Trace},
-            PidMain!{loaded, Loaded},
-            PidMain!{fun_dict, FunDict};
+            PidMain!{loaded, Loaded};
         Other -> 
             io:format("Untracked msg ~p\n", [Other]),
-            receive_loop(Current, Trace, Loaded, FunDict, PidMain, Timeout, Dir, TracingNode, RunningProcs)
+            receive_loop(Current, Trace, Loaded, PidMain, Timeout, Dir, TracingNode, RunningProcs)
     after 
         Timeout ->
             PidMain!idle,
-            receive_loop(Current, Trace, Loaded, FunDict, PidMain, Timeout, Dir, TracingNode, RunningProcs)
+            receive_loop(Current, Trace, Loaded, PidMain, Timeout, Dir, TracingNode, RunningProcs)
     end.
 
 send_module(TracingNode, Module, Dir) ->

@@ -78,18 +78,10 @@ get_module_filename(T, Acc) ->
 			Acc
 	end.
 
-inst_fun(T, ModFileName) ->
+inst_fun(T, _ModFileName) ->
 	case erl_syntax:type(T) of 
-		function -> 
-			NTAnn = 
-				erl_syntax_lib:annotate_bindings(T,ordsets:new()),
-			NTAnn2 = 
-				erl_syntax_lib:map(
-					fun(CT) -> 
-						annotate_info_tree(CT,ModFileName) 
-					end,
-					NTAnn), 
-			Clauses = erl_syntax:function_clauses(NTAnn2),
+		function ->
+			Clauses = erl_syntax:function_clauses(T),
 			NClauses = inst_fun_clauses(Clauses, erl_syntax:function_name(T)),
 			erl_syntax:function(erl_syntax:function_name(T), NClauses);
 		_ -> 
@@ -178,13 +170,6 @@ inst_expr(T) ->
 							T
 					end,		
 				NApp;
-			fun_expr -> 
-				try
-					inst_fun_expr(T)
-				catch
-					_:_ ->
-						T
-				end;
 			_ ->
 				T
 		end,
@@ -271,22 +256,6 @@ inst_fun_clauses0(Clauses) ->
 		 end
 	 || Clause <- Clauses].
 
-inst_fun_expr(T) ->
-	Clauses = erl_syntax:fun_expr_clauses(T),
-	NClauses = inst_fun_clauses(Clauses, hd(pos_and_pp(T))),
-	NFunExpr = erl_syntax:fun_expr(NClauses),
-
-	{[VarFun], [StoreFun]} = 
-		args_assign("EDDFunResult", [NFunExpr]),
-
-	SendFunInfo = 
-		build_store_fun(VarFun, hd(pos_and_pp(T))),	
-
-	BlockFun = 
-		erl_syntax:block_expr([StoreFun, SendFunInfo, VarFun]),
-
-	BlockFun.
-
 inst_send(_T, SendArgs) ->
 
 	{VarArgs, StoreArgs} = 
@@ -295,7 +264,6 @@ inst_send(_T, SendArgs) ->
 	SendSend = 
 		build_send_trace(
 			send_sent,
-			% VarArgsToSend ++ pos_and_pp(T)),
 			[]),
 
 	{RecLambda, LambdaVar} =
@@ -312,13 +280,8 @@ inst_send(_T, SendArgs) ->
 	BlockSend.
 
 inst_spawn(T, SpawnArgs) ->
-	% TODO: Be careful with this approach. Could not work for spwan with only one arg, i.e. spawn(fun() -> ... )
-	% Maybe solved correcting SpwancCall or removing previous variables bindings for that case
-	% io:format("INSTRUMENT spawn ~p\n", [erl_syntax:application_operator(T)]),
 	VarReceiveResult = 
 		free_named_var("EDDSpawnResult"),
-	% {VarArgs, StoreArgs} = 
-	% 	args_assign("EDDSpawnArg", SpawnArgs),
 
 	NSpawnArgs =
 		case SpawnArgs of
@@ -331,7 +294,6 @@ inst_spawn(T, SpawnArgs) ->
 		end,
 
 	SendSpawn = 
-		% build_send_trace(made_spawn, [erl_syntax:tuple(VarArgs) ,VarReceiveResult] ++ pos_and_pp(T)), 
 		build_send_trace(made_spawn, [VarReceiveResult]),
 
 	SpawnCall = 
@@ -349,60 +311,19 @@ inst_receive_clause(Clause, InstInfo) ->
 	{ [_VarMsg], Patterns} = 
 		args_assign("EDDMsg", erl_syntax:clause_patterns(Clause)),
 
-	% VarsContextStart = 
-	% 	get_ann_info(env, hd(erl_syntax:clause_body(Clause))),
-	% VarsBindings = 
-	% 	get_ann_info(bound, hd(erl_syntax:clause_patterns(Clause))),
-	% ContextStart = 
-	% 	build_dict_var(VarsContextStart),
-	% Bindings = 
-	% 	build_dict_var(VarsBindings),
-
 	SendEvaluated =
 		build_send_trace(
 			receive_evaluated, 
 			[LambdaVar]),
-			%[VarMsg, ContextStart, Bindings, erl_syntax:integer(CurrentClause)]),
-
-	% LastExpr = 
-	% 	lists:last(erl_syntax:clause_body(Clause)),
-	% BodyWOLast =
-	% 	lists:droplast(erl_syntax:clause_body(Clause)),
-	% VarReceiveResultName = free_named_var("EDDResultReceive"),
-	% NLastExpr = 
-	% 	erl_syntax:match_expr(
-	% 		VarReceiveResultName , 
-	% 		LastExpr),
-	% VarsContextEnd = 
-	% 	get_ann_info(env,lists:last(erl_syntax:clause_body(Clause))),
-	% ContextEnd = 
-	% 	build_dict_var(VarsContextEnd),
-	% SendResult =
-	% 	build_send_trace(
-	% 		receive_finished, 
-	% 		[VarReceiveResultName, ContextEnd]), 
-	% NOldBody = 
+ 
 	NBody = 
 		[SendEvaluated] ++ erl_syntax:clause_body(Clause),
-	% [SendEvaluated] ++ BodyWOLast ++ [NLastExpr, SendResult, VarReceiveResultName],
-	% NBody = 
-	% 	[SendContext | NOldBody],
+
 	NPatterns = [erl_syntax:tuple([LambdaVar| Patterns])],
 
 	NClause = 
 		erl_syntax:clause(NPatterns, erl_syntax:clause_guard(Clause), NBody),
-	{erl_syntax:set_ann(NClause, erl_syntax:get_ann(Clause) ), {CurrentClause + 1, LambdaVar}} .
-
-% erl_syntax_zip([], []) ->
-% 	[];
-% erl_syntax_zip([H1 | T1], [H2 | T2]) ->
-% 	[ erl_syntax:tuple([H1, H2]) | erl_syntax_zip(T1, T2)]. 
-
-% build_dict_var(Vars) ->
-% 	erl_syntax:list(
-% 		erl_syntax_zip(
-% 			[erl_syntax:string(V) || V <- Vars],
-% 			[erl_syntax:variable(V)  || V <- Vars] )).
+	{erl_syntax:set_ann(NClause, erl_syntax:get_ann(Clause) ), {CurrentClause + 1, LambdaVar}}.
 
 build_send_par(Dest, Pars) ->
 	erl_syntax:application(
@@ -450,14 +371,6 @@ build_send_lambda(Pid, Msg, Lambda) ->
 											])
 		]).
 
-build_store_fun(Name, FunInfo) -> 
-	build_send(
-		[
-	 		erl_syntax:atom(edd_store_fun),
-	 		Name,
-	 		FunInfo
-	 	] ).
-
 build_receive_load() -> 
 	erl_syntax:receive_expr
 	(
@@ -492,32 +405,6 @@ build_rec_lambda() ->
 			]),
 	{RecExpr, LambdaVar}.
 
-pos_and_pp(T, [{file_name,Fname}, {module_name,MName}]) ->
-	[erl_syntax:tuple(
-		[
-			erl_syntax:atom(pos_info),
-			erl_syntax:tuple(
-				[
-					MName,
-					Fname,
-					erl_syntax:integer(erl_syntax:get_pos(T)),
-					erl_syntax:string(erl_prettypr:format(T)) 
-				])
-	 	])].
-
-pos_and_pp(T) ->
-	get_ann_info(info_tree, T).
-
-
-annotate_info_tree(T, ModFileName = [_, {module_name,MName}]) ->
-	NT = 
-		erl_syntax:add_ann(
-			{info_tree, pos_and_pp(T, ModFileName)},
-			T),
-	erl_syntax:add_ann(
-		{module_name, MName},
-		NT).
-
 get_free() ->
 	Free = get(free),
 	put(free, Free + 1),
@@ -536,16 +423,6 @@ args_assign(NameRoot, Args) ->
 			{VarArg, StoreArg}
 		 end
 		|| Arg <- Args] ).
-
-get_ann_info(Tag, T) ->
-	case [Info 
-		|| {Tag_, Info} <- erl_syntax:get_ann(T), 
-			Tag_ == Tag ] of 
-		[] -> 
-			[];
-		[H|_] ->
-			H 
-	end.
 
 lists_with_modules_to_instument() ->	
 	erl_syntax:list(
