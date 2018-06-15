@@ -34,12 +34,12 @@ trace(InitialCall, PidAnswer) ->
 trace(InitialCall, PidAnswer, Opts) ->
     NOpts0 =
         case proplists:is_defined(timeout, Opts) of
-            true -> ok;
+            true -> Opts;
             false -> [{timeout, 1000} | Opts]
         end,
     NOpts1 =
         case proplists:is_defined(dir, NOpts0) of
-            true -> ok;
+            true -> NOpts0;
             false -> [{dir, "."} | NOpts0]
         end,
     trace_1(InitialCall, PidAnswer, NOpts1).
