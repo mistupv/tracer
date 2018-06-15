@@ -242,26 +242,30 @@ send_module(TracingNode, Module, Dir) ->
 
 
 execute_call(Call, PidParent, _Dir, TracingNode) ->
-    % spawn(
-    %     TracingNode,
     send_module(TracingNode, ?MODULE, filename:absname(filename:dirname(code:which(?MODULE)) ++ "/..") ++ "/src"),
     send_module(TracingNode, smerl, filename:absname(filename:dirname(code:which(?MODULE)) ++ "/..") ++ "/src"),
+
     FUN = 
         fun() -> 
-            % io:format("START\n")%,
             M1 = smerl:new(foo),
             {ok, M2} = 
-                smerl:add_func(M1, "bar() -> try " ++ Call ++ " catch E1:E2 -> {E1,E2} end."),
-            smerl:compile(M2,[nowarn_format]),
+                smerl:add_func(M1, "bar() -> try " ++
+                                   "MainNode = list_to_atom(\"edd_main@\"++after_char($@,atom_to_list(node())))," ++
+                                   " MainRes = " ++ Call ++
+                                   ", {edd_tracer,MainNode} ! {edd_trace, proc_done, self(), {}}, MainRes " ++
+                                   "catch E1:E2 -> {E1,E2} end."),
+            {ok, M3} =
+                smerl:add_func(M2,"after_char(_, []) -> [];" ++
+                                  "after_char(Char, [Char|Rest]) -> Rest;" ++
+                                  "after_char(Char, [_|Rest]) -> after_char(Char, Rest)."),
+            smerl:compile(M3,[nowarn_format]),
             receive 
                 start -> ok 
             end,
             Res = foo:bar(), 
-            PidParent!{result,Res} 
+            PidParent!{result,Res}
         end,
     spawn(TracingNode, FUN).
-    % rpc:call(
-    %     TracingNode, erlang, 'spawn', [FUN]).
 
 get_mod_name(InitialCall) ->
     AExpr = 
