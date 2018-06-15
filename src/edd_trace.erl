@@ -85,15 +85,12 @@ trace_1(InitialCall, PidAnswer, Opts) ->
     register(edd_tracer, PidTrace),
     PidCall!start,
     receive 
-        {result,Result} ->
-            % io:format("TimeoutServer: ~p\n", [TimeoutServer]),
-            receive 
-                all_done -> ok;
-                idle -> ok
-            end,
-            io:format("\nExecution result: ~p\n",[Result])
-    after 
-        Timeout ->
+        all_done ->
+            receive
+                {result,Result} ->
+                io:format("\nExecution result: ~p\n",[Result])
+            end;
+        idle ->
             io:format("\nTracing timeout\n")
     end,
     unregister(edd_tracer),
@@ -175,12 +172,26 @@ receive_loop(Current, Trace, Loaded, FunDict, PidMain, Timeout, Dir, TracingNode
                 case TraceItem of
                     {edd_trace, made_spawn, _, {SpPid}} ->
                       [SpPid | RunningProcs];
+                    {edd_trace, proc_done, PidDone, _} ->
+                      lists:delete(PidDone, RunningProcs);
                     _ ->
                         RunningProcs
                 end,
+            case NRunningProcs of
+                [] -> PidMain ! all_done;
+                _ -> continue
+            end,
+            NTrace =
+                case TraceItem of
+                    {edd_trace, proc_done, _, _} ->
+                        Trace;
+                    _ ->
+                        [NTraceItem | Trace]
+                end,
+            % io:format("~p~n", [NRunningProcs]),
             receive_loop(
                 Current + 1, 
-                [NTraceItem | Trace],
+                NTrace,
                 Loaded, FunDict, PidMain, Timeout, Dir, TracingNode, NRunningProcs);
         {edd_load_module, Module, PidAnswer} ->
             % io:format("Load module " ++ atom_to_list(Module) ++ "\n"),
@@ -204,14 +215,6 @@ receive_loop(Current, Trace, Loaded, FunDict, PidMain, Timeout, Dir, TracingNode
                         dict:append(Name, FunInfo, FunDict) 
                 end, 
             receive_loop(Current, Trace, Loaded, NFunDict, PidMain, Timeout, Dir, TracingNode, RunningProcs);
-        {edd_proc_done, Pid} ->
-            NRunningProcs = lists:delete(Pid, RunningProcs),
-            % TODO: Check also if there are no messages left in the mailbox
-            case NRunningProcs of
-                [] -> PidMain ! all_done;
-                _ -> continue
-            end,
-            receive_loop(Current, Trace, Loaded, FunDict, PidMain, Timeout, Dir, TracingNode, NRunningProcs);   
         stop -> 
             PidMain!{trace, Trace},
             PidMain!{loaded, Loaded},
