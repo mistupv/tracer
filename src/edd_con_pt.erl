@@ -255,6 +255,19 @@ inst_fun_clauses(Clauses, _FunId) ->
 		 end
 	 || Clause <- Clauses].
 
+inst_fun_clauses0(Clauses) ->
+	[
+		begin
+			NBody = 
+				erl_syntax:clause_body(Clause) ++
+				[build_send_trace(proc_done, [])],
+		 	erl_syntax:clause(
+					erl_syntax:clause_patterns(Clause), 
+					erl_syntax:clause_guard(Clause), 
+					NBody)
+		 end
+	 || Clause <- Clauses].
+
 inst_fun_expr(T) ->
 	Clauses = erl_syntax:fun_expr_clauses(T),
 	NClauses = inst_fun_clauses(Clauses, hd(pos_and_pp(T))),
@@ -301,20 +314,30 @@ inst_spawn(T, SpawnArgs) ->
 	% io:format("INSTRUMENT spawn ~p\n", [erl_syntax:application_operator(T)]),
 	VarReceiveResult = 
 		free_named_var("EDDSpawnResult"),
-	{VarArgs, StoreArgs} = 
-		args_assign("EDDSpawnArg", SpawnArgs),
+	% {VarArgs, StoreArgs} = 
+	% 	args_assign("EDDSpawnArg", SpawnArgs),
+
+	NSpawnArgs =
+		case SpawnArgs of
+			[Fun] ->
+					NFunClauses = inst_fun_clauses0(erl_syntax:fun_expr_clauses(Fun)),
+					[erl_syntax:fun_expr(NFunClauses)];
+			SpawnArgs0 ->
+				Call = erl_syntax:application(erl_syntax:atom(erlang),erl_syntax:atom(apply), SpawnArgs0),
+				[erl_syntax:fun_expr([erl_syntax:clause([],[],[Call, build_send_trace(proc_done, [])])])]
+		end,
 
 	SendSpawn = 
 		% build_send_trace(made_spawn, [erl_syntax:tuple(VarArgs) ,VarReceiveResult] ++ pos_and_pp(T)), 
 		build_send_trace(made_spawn, [VarReceiveResult]),
 
 	SpawnCall = 
-		erl_syntax:application(erl_syntax:application_operator(T), VarArgs), 
+		erl_syntax:application(erl_syntax:application_operator(T), NSpawnArgs),
 	NT = 
 		erl_syntax:match_expr(VarReceiveResult, SpawnCall), 
 
 	BlockSpawn = 
-		erl_syntax:block_expr(StoreArgs ++ [NT, SendSpawn, VarReceiveResult]),
+		erl_syntax:block_expr([NT, SendSpawn, VarReceiveResult]),
 	BlockSpawn.
 
 
