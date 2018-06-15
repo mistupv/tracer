@@ -47,7 +47,10 @@ parse_transform(Forms, Opts) ->
 				 end,
 				 Form) 
 		|| Form <- Forms],
-	erl_syntax:revert_forms(NForms).
+	RForms = erl_syntax:revert_forms(NForms),
+	% {ok, File} = file:open("./inst_forms.erl", [write]), 
+	% [io:format(File, "~s", [erl_pp:form(RForm)]) || RForm <- RForms],
+	RForms.
 
 get_module_filename(T, Acc) ->
 	case erl_syntax:type(T) of 
