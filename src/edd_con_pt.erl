@@ -27,12 +27,8 @@
 -export([parse_transform/2]).
 
 % TODO: Treat correctly errors to be considered as a value
-
-
 parse_transform(Forms, Opts) ->
-	% io:format("Opts: ~p\n", [Opts]),
 	put(modules_to_instrument, hd([InsMod0 || {inst_mod, InsMod0} <- Opts])),
-	% io:format("Trans: ~p\n", [hd(Forms)]),
 	put(free, 0),
 	ModFileName = 
 		lists:sort(
@@ -51,19 +47,6 @@ parse_transform(Forms, Opts) ->
 				 end,
 				 Form) 
 		|| Form <- Forms],
-	% StrRevertedNForms = 
-	% 	[ try 
-	% 		erl_pp:form(Form)
-	% 	 catch 
-	% 	 _:_ -> 
-	% 	 	try
-	% 	 		erl_pp:function(Form)
-	% 	 	catch 
-	% 	 	_:_ ->
-	% 	 		"error" ++ lists:flatten(io_lib:format("~p", [Form]))
-	% 	 	end
-	% 	 end || Form <- erl_syntax:revert_forms(NForms)],
-	% [io:format("~s\n", [StrForm]) || StrForm <- StrRevertedNForms],
 	erl_syntax:revert_forms(NForms).
 
 get_module_filename(T, Acc) ->
@@ -103,43 +86,14 @@ inst_fun(T, ModFileName) ->
 						annotate_info_tree(CT,ModFileName) 
 					end,
 					NTAnn), 
-			% io:format("~p\n", [NTAnn2]),
 			Clauses = erl_syntax:function_clauses(NTAnn2),
 			NClauses = inst_fun_clauses(Clauses, erl_syntax:function_name(T)),
-			% NClauses = Clauses,
 			erl_syntax:function(erl_syntax:function_name(T), NClauses);
-			 % erl_syntax:function(erl_syntax:function_name(T), Clauses);
-		% attribute -> 
-		% 	NameAttr = 
-		% 		erl_syntax:attribute_name(T),
-		% 	case erl_syntax:type(NameAttr) of
-		% 		atom ->  
-		% 			case erl_syntax:atom_value(NameAttr) of
-		% 				file -> 
-		% 					% FileName = 
-		% 					% 	erl_syntax:string_literal(
-		% 					% 		hd(erl_syntax:attribute_arguments(T0))),
-		% 					% io:format("~s\n",[FileName]),
-		% 					put(file_name, hd(erl_syntax:attribute_arguments(T))),
-		% 					T;
-		% 				module -> 
-		% 					% io:format("~p: ~p\n", [self(),erl_syntax:attribute_arguments(T0)]),
-		% 					put(module_name, hd(erl_syntax:attribute_arguments(T))),
-		% 					T;
-		% 				_ ->
-		% 					T
-		% 			end;
-		% 		_ ->
-		% 			T
-		% 	end,
-		% 	T;
 		_ -> 
 			T
 	end.
 
 inst_expr(T) ->
-	% io:format("~p\n", [erl_syntax:revert(T)]),
-	% io:format("~p\n", [erl_syntax:type(T)]),
 	NT = 
 		case erl_syntax:type(T) of 
 			receive_expr ->
@@ -150,7 +104,6 @@ inst_expr(T) ->
 						fun inst_receive_clause/2, 
 						{1, LambdaVar},
 						Clauses),
-				% [io:format("~p\n", [erl_syntax:revert(NClause)]) || NClause <- NClauses ],
 				NReceive = 
 					erl_syntax:receive_expr(
 						NClauses, 
@@ -169,11 +122,8 @@ inst_expr(T) ->
 			application ->
 				AppOper = 
 					erl_syntax:application_operator(T),
-				% io:format("~p\n", [AppOper]),
 				NApp = 
 					case erl_syntax:type(AppOper) of 
-						% {_,_} ->
-						% 	T;
 						atom ->
 							case erl_syntax:atom_value(AppOper)  of 
 								spawn ->
@@ -190,28 +140,12 @@ inst_expr(T) ->
 									inst_call_loading(T, ModName);
 								_ ->
 									T
-									% case lists:member(Other, ?BIFS) of 
-									% 	true -> 
-									% 		T;
-									% 	false -> 
-									% 		inst_call(T, erl_syntax:application_arguments(T))
-									% end
 							end;
-						% {var,_,Name} ->
-						% 	inst_spawn(T, erl_syntax:application_arguments(T));
-						% _ -> 
-						% 	case erl_syntax:type(AppOper) of 
 						module_qualifier -> 
 							ModName = 
 								erl_syntax:module_qualifier_argument(AppOper),
 							FunName = 
 								erl_syntax:module_qualifier_body(AppOper),
-							% try 
-							% 	io:format("~p\n", [{erl_syntax:atom_value(ModName), erl_syntax:atom_value(FunName)}])
-							% catch
-							% 	_:_ ->
-							% 		ok
-							% end,
 							try 
 								case {erl_syntax:atom_value(ModName), erl_syntax:atom_value(FunName)} of 
 									{erlang, send} ->
@@ -224,24 +158,13 @@ inst_expr(T) ->
 										inst_spawn(T, erl_syntax:application_arguments(T));
 									{erlang, spawn_opt} ->
 										inst_spawn(T, erl_syntax:application_arguments(T));
-									% {var,_,_} ->
-									% 	T;
 									_ ->
-										% ModNameStr = erl_syntax:atom_literal(ModName),
-										% {[VarCall], [StoreCall]} = 
-										% 	args_assign("EDDCallResult", [T]),
-										% io:format("~p\n", [{ModNameStr, FunName}]),
 										inst_call_loading(T, ModName)
-									% _ -> 
-									% 	T
 								end
 							catch
 								_:_ ->
 									inst_call_loading(T, ModName)
 							end;
-						% _ ->
-						% 	T
-					% end;
 						variable -> 
 							T;
 						fun_expr -> 
@@ -252,8 +175,6 @@ inst_expr(T) ->
 							T
 					end,		
 				NApp;
-			% macro ->
-			% 	io:format("~p\n",[T]);
 			fun_expr -> 
 				try
 					inst_fun_expr(T)
@@ -279,32 +200,17 @@ inst_call_loading(T, ModName) ->
 					[ModName]), 
 				erl_syntax:operator("++"), 
 				erl_syntax:string(".erl"))]),
-			% [erl_syntax:string(ModNameStr ++ ".erl")]),
 		[
-			%TODO: try to load also from src directory
+			% TODO: try to load also from src directory
 			erl_syntax:clause(
 				[erl_syntax:cons(
 					erl_syntax:char($.), 
 					erl_syntax:underscore())] ,
 				[],
 				[	
-					% erl_syntax:application(
-					% 	erl_syntax:atom(io) , 
-					% 	erl_syntax:atom(format), 
-					% 	[erl_syntax:string("entra desde " ++ erl_syntax:atom_literal(get(module_name)) ++ " : " ++ ModNameStr ++ " " ++ erl_syntax:atom_literal(FunName) ++ "\n")]),
-					% erl_syntax:application(
-					% 	erl_syntax:atom(edd_trace_new) , 
-					% 	erl_syntax:atom(compile_and_reload), 
-					% 	[ModName]),
 					build_send_load(ModName),
 					build_receive_load(),
 					T
-					% StoreCall,
-					% erl_syntax:application(
-					% 	erl_syntax:atom(edd_trace_new) , 
-					% 	erl_syntax:atom(undo_compile_and_reload), 
-					% 	[ModName]),
-					% VarCall
 				]),
 			erl_syntax:clause(
 				[erl_syntax:underscore()],
@@ -321,13 +227,6 @@ inst_call_loading(T, ModName) ->
 								[erl_syntax:atom(true)] ,
 								[],
 								[	
-									% erl_syntax:application(
-									% 	erl_syntax:atom(io) , 
-									% 	erl_syntax:atom(format), 
-									% 	[erl_syntax:application(
-									% 			erl_syntax:atom(erlang),
-									% 			erl_syntax:atom(atom_to_list),
-									% 			[ModName])]),
 									build_send_load(ModName),
 									build_receive_load(),
 									T
@@ -342,68 +241,13 @@ inst_call_loading(T, ModName) ->
 				])
 		]).
 
-inst_fun_clauses(Clauses, FunId) ->
-	% T = erl_syntax_lib:mapfold(fun annotate_vars/2,T0),
-	% NClauses0 = 
-	% 	[
-	% 	begin
-	% 		NBody = 
-	% 			element(1, 
-	% 				lists:mapfoldl(
-	% 					fun ann_expr/2,
-	% 					vars_patterns(erl_syntax:clause_patterns(Clause)),
-	% 					erl_syntax:clause_body(Clause))),
-	% 		erl_syntax:clause(
-	% 			erl_syntax:clause_patterns(Clause), 
-	% 			erl_syntax:clause_guard(Clause), 
-	% 			NBody)
-	% 	end
-	% 	|| Clause <- Clauses],
-	% io:format("~p\n", [erl_syntax:atom_literal(erl_syntax:function_name(T))]),
+inst_fun_clauses(Clauses, _FunId) ->
 	[
 		begin
 			NBody0 = 
 				erl_syntax:clause_body(
 					erl_syntax_lib:map(
 						fun inst_expr/1, Clause )),
-			% io:format("~p: ~p\n", [self(),get(module_name)]),
-			% {ParValues, NPars} = 
-			% 	args_assign("EDDFunPar", erl_syntax:clause_patterns(Clause)),
-			% VarsContextStart = 
-			% 	get_ann_info(env, hd(erl_syntax:clause_body(Clause))),
-			% ContextStart = 
-			% 	build_dict_var(VarsContextStart),
-			% CallRep = 
-			% 		[get_ann_info(module_name, Clause),
-			% 		 FunId] 
-			% 		 % ), 
-			% 		 ++ [ erl_syntax:list(ParValues)], 
-			% SendCallStart = 
-			% 	build_send_trace(start_call, [erl_syntax:tuple(CallRep), ContextStart] ++ pos_and_pp(Clause)), 
-			% LastExpr = 
-			% 	lists:last(NBody0),
-			% BodyWOLast =
-			% 	lists:droplast(NBody0),
-			% VarFunResult = free_named_var("EDDResultFun"),
-			% VarsContextEnd = 
-			% 	get_ann_info(env, lists:last(erl_syntax:clause_body(Clause))),
-			% ContextEnd = 
-			% 	build_dict_var(VarsContextEnd),
-			% NLastExpr = 
-			% 	erl_syntax:match_expr(
-			% 		VarFunResult, 
-			% 		LastExpr),
-			% SendResult =
-			% 	build_send_trace(end_call, [erl_syntax:tuple(CallRep), VarFunResult, ContextEnd]), 
-			% NOldBody = 
-			% 	BodyWOLast ++ [NLastExpr, SendResult, VarFunResult],
-			% Salida = 
-			% 	erl_syntax:application(
-			% 		erl_syntax:atom(io) , 
-			% 		erl_syntax:atom(format), 
-			% 		[erl_syntax:string("entra " ++ erl_syntax:atom_literal(get(module_name)) ++ " " ++ erl_syntax:atom_literal(erl_syntax:function_name(T)) ++ "\n")]),
-			% NBody = 
-			% 	[SendCallStart | NOldBody],
 		 	erl_syntax:clause(
 					erl_syntax:clause_patterns(Clause), 
 					erl_syntax:clause_guard(Clause), 
@@ -412,9 +256,6 @@ inst_fun_clauses(Clauses, FunId) ->
 	 || Clause <- Clauses].
 
 inst_fun_expr(T) ->
-			% 
-			%  erl_syntax:function(erl_syntax:function_name(T), NClauses),
-	% io:format("B1: ~p\n", [erl_syntax:fun_expr_clauses(T)]),
 	Clauses = erl_syntax:fun_expr_clauses(T),
 	NClauses = inst_fun_clauses(Clauses, hd(pos_and_pp(T))),
 	NFunExpr = erl_syntax:fun_expr(NClauses),
@@ -430,37 +271,11 @@ inst_fun_expr(T) ->
 
 	BlockFun.
 
-inst_send(T, SendArgs) ->
+inst_send(_T, SendArgs) ->
 
 	{VarArgs, StoreArgs} = 
 		args_assign("EDDSendArg", SendArgs),
-
-	% VarArgsToSend = 
-	% 	[
-	% 		erl_syntax:case_expr(
-	% 			erl_syntax:application(
-	% 				erl_syntax:atom(erlang),
-	% 				erl_syntax:atom(is_atom),
-	% 				[hd(VarArgs)]),
-	% 			[
-	% 				erl_syntax:clause(
-	% 					[erl_syntax:atom(true)],
-	% 					[],
-	% 					[erl_syntax:application(
-	% 						erl_syntax:atom(erlang),
-	% 						erl_syntax:atom(whereis),
-	% 						[hd(VarArgs)])]),
-	% 				erl_syntax:clause(
-	% 					[erl_syntax:atom(false)],
-	% 					[],
-	% 					[hd(VarArgs)])
-	% 			])
-	% 		|
-	% 		tl(VarArgs)
-	% 	],
-
 	SndVarArg = lists:nth(2, VarArgs),
-
 	SendSend = 
 		build_send_trace(
 			send_sent,
@@ -505,36 +320,17 @@ inst_spawn(T, SpawnArgs) ->
 
 inst_receive_clause(Clause, InstInfo) ->
 	{CurrentClause, LambdaVar} = InstInfo,
-	{ [VarMsg], Patterns} = 
+	{ [_VarMsg], Patterns} = 
 		args_assign("EDDMsg", erl_syntax:clause_patterns(Clause)),
-	% io:format("~p\n", [hd(erl_syntax:clause_body(Clause))]),
-	% io:format("~p\n", [erl_syntax:get_ann(
-	% 		hd(erl_syntax:clause_body(Clause))) ]),
-	% io:format("~p\n", [hd(erl_syntax:get_ann(
-	% 		hd(erl_syntax:clause_body(Clause))) )]),
-	% io:format("~p\n", [hd(Patterns)]),
-	VarsContextStart = 
-		get_ann_info(env, hd(erl_syntax:clause_body(Clause))),
-	VarsBindings = 
-		get_ann_info(bound, hd(erl_syntax:clause_patterns(Clause))),
-		% case erl_syntax:get_ann(
-		% 	hd(erl_syntax:clause_body(Clause))) of 
-		% 	[] -> 
-		% 		[];
-		% 	[H|_] ->
-		% 		H 
-		% end,
-	% io:format("~p\n", [Vars]),
-	% SendContext =
-	% 	build_send_trace(
-	% 		receive_context, 
-	% 		erl_syntax_zip(
- % 				[erl_syntax:string(V) || V <- Vars],
- % 				[erl_syntax:variable(V)  || V <- Vars])  ), 
-	ContextStart = 
-		build_dict_var(VarsContextStart),
-	Bindings = 
-		build_dict_var(VarsBindings),
+
+	% VarsContextStart = 
+	% 	get_ann_info(env, hd(erl_syntax:clause_body(Clause))),
+	% VarsBindings = 
+	% 	get_ann_info(bound, hd(erl_syntax:clause_patterns(Clause))),
+	% ContextStart = 
+	% 	build_dict_var(VarsContextStart),
+	% Bindings = 
+	% 	build_dict_var(VarsBindings),
 
 	SendEvaluated =
 		build_send_trace(
@@ -571,16 +367,16 @@ inst_receive_clause(Clause, InstInfo) ->
 		erl_syntax:clause(NPatterns, erl_syntax:clause_guard(Clause), NBody),
 	{erl_syntax:set_ann(NClause, erl_syntax:get_ann(Clause) ), {CurrentClause + 1, LambdaVar}} .
 
-erl_syntax_zip([], []) ->
-	[];
-erl_syntax_zip([H1 | T1], [H2 | T2]) ->
-	[ erl_syntax:tuple([H1, H2]) | erl_syntax_zip(T1, T2)]. 
+% erl_syntax_zip([], []) ->
+% 	[];
+% erl_syntax_zip([H1 | T1], [H2 | T2]) ->
+% 	[ erl_syntax:tuple([H1, H2]) | erl_syntax_zip(T1, T2)]. 
 
-build_dict_var(Vars) ->
-	erl_syntax:list(
-		erl_syntax_zip(
-			[erl_syntax:string(V) || V <- Vars],
-			[erl_syntax:variable(V)  || V <- Vars] )).
+% build_dict_var(Vars) ->
+% 	erl_syntax:list(
+% 		erl_syntax_zip(
+% 			[erl_syntax:string(V) || V <- Vars],
+% 			[erl_syntax:variable(V)  || V <- Vars] )).
 
 build_send_par(Dest, Pars) ->
 	erl_syntax:application(
@@ -645,10 +441,6 @@ build_receive_load() ->
 				[erl_syntax:atom(loaded)],
 				[],
 				[erl_syntax:atom(ok)
-				% erl_syntax:application(
-				% 	erl_syntax:atom(io) , 
-				% 	erl_syntax:atom(format), 
-				% 	[erl_syntax:string("RECIBIDO \n")])
 			 	]
 			)
 		]
@@ -669,16 +461,12 @@ build_rec_lambda() ->
 					],
 					[],
 					[erl_syntax:atom(ok)]
-					% erl_syntax:application(
-					% 	erl_syntax:atom(io) , 
-					% 	erl_syntax:atom(format), 
-					% 	[erl_syntax:string("RECIBIDO \n")])
+
 				)
 			]),
 	{RecExpr, LambdaVar}.
 
 pos_and_pp(T, [{file_name,Fname}, {module_name,MName}]) ->
-	% io:format("~p\n", [erl_syntax:get_attrs(T)]),
 	[erl_syntax:tuple(
 		[
 			erl_syntax:atom(pos_info),
@@ -687,30 +475,15 @@ pos_and_pp(T, [{file_name,Fname}, {module_name,MName}]) ->
 					MName,
 					Fname,
 					erl_syntax:integer(erl_syntax:get_pos(T)),
-					% erl_syntax:string(
-					% 	io_lib:format("~p", [erl_syntax:get_pos(T)]) ),
 					erl_syntax:string(erl_prettypr:format(T)) 
 				])
 	 	])].
 
 pos_and_pp(T) ->
-	% io:format("~p\n", [erl_syntax:get_attrs(T)]),
 	get_ann_info(info_tree, T).
 
-	% [erl_syntax:tuple(
-	% 	[
-	% 		erl_syntax:atom(pos_info),
-	% 		erl_syntax:tuple(
-	% 			[
-	% 				erl_syntax:integer(erl_syntax:get_pos(T)),
-	% 				% erl_syntax:string(
-	% 				% 	io_lib:format("~p", [erl_syntax:get_pos(T)]) ),
-	% 				erl_syntax:string(erl_prettypr:format(T)) 
-	% 			])
-	%  	])].
 
 annotate_info_tree(T, ModFileName = [_, {module_name,MName}]) ->
-	% T.
 	NT = 
 		erl_syntax:add_ann(
 			{info_tree, pos_and_pp(T, ModFileName)},
@@ -718,13 +491,6 @@ annotate_info_tree(T, ModFileName = [_, {module_name,MName}]) ->
 	erl_syntax:add_ann(
 		{module_name, MName},
 		NT).
-
-% vars_patterns(Patterns) ->
-% 	lists:foldl(
-% 		fun(Pattern, Acc) -> 
-% 			sets:to_list(erl_syntax_lib:variables(Pattern)) ++ Acc 
-% 		end, 
-% 		[], Patterns).
 
 get_free() ->
 	Free = get(free),
@@ -746,7 +512,6 @@ args_assign(NameRoot, Args) ->
 		|| Arg <- Args] ).
 
 get_ann_info(Tag, T) ->
-	% io:format("~p\n~p: ~p\n", [T, Tag, erl_syntax:get_ann(T)]),
 	case [Info 
 		|| {Tag_, Info} <- erl_syntax:get_ann(T), 
 			Tag_ == Tag ] of 
@@ -761,20 +526,3 @@ lists_with_modules_to_instument() ->
 		[erl_syntax:atom(M) 
 		|| 
 		M <- get(modules_to_instrument), is_atom(M)]).
-
-	% hd(
-	% 	[Info 
-	% 	|| {Tag_, Info} <- erl_syntax:get_ann(T), 
-	% 		Tag_ == Tag ]).
-
-% get_var_names(T) ->
-% 	lists:usort(
-% 		erl_syntax_lib:fold(
-% 			fun(V, Acc) -> 
-% 				case erl_syntax:type(V) of 
-% 					variable ->
-% 						[erl_syntax:variable_name(V) | Acc];
-% 					_ ->
-% 						Acc
-% 				end 
-% 			end, [], T) ).
