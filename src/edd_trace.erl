@@ -47,7 +47,12 @@ trace(InitialCall, PidAnswer, Opts) ->
             true -> NOpts1;
             false -> [{mods, []} | NOpts1]
         end,
-    trace_1(InitialCall, PidAnswer, NOpts2).
+    NOpts3 =
+        case proplists:is_defined(log_dir, NOpts2) of
+            true -> NOpts2;
+            false -> [{log_dir, "trace"} | NOpts2]
+        end,
+    trace_1(InitialCall, PidAnswer, NOpts3).
 
 trace_1(InitialCall, PidAnswer, Opts) ->
     ModName = get_mod_name(InitialCall),
@@ -59,6 +64,7 @@ trace_1(InitialCall, PidAnswer, Opts) ->
     Timeout = proplists:get_value(timeout, Opts),
     Dir     = proplists:get_value(dir,     Opts),
     Mods    = proplists:get_value(mods,    Opts),
+    LogDir  = proplists:get_value(log_dir, Opts),
     put(modules_to_instrument, Mods),
     % io:format("~p\n", [SO]),
     % io:format("~p\n~p\n", [ModName, Dir]),
