@@ -73,7 +73,8 @@ trace_1(InitialCall, PidAnswer, Opts) ->
     instrument_and_reload(ModName, Dir, TracingNode),
     PidMain = self(),
     PidCall = execute_call(InitialCall, self(), Dir, TracingNode),
-    RunningProcs = [PidCall],
+    LogResult = cauder_logger:init_log_dir(LogDir),
+    RunningProcs = [{PidCall, cauder_logger:init_log_file(LogDir, PidCall)}],
     % io:format("PIDCALL: ~p\n", [PidCall]),
     TimeoutServer = Timeout,
     InstMod = 
@@ -89,7 +90,8 @@ trace_1(InitialCall, PidAnswer, Opts) ->
                     [ModName],
                     PidMain, 
                     TimeoutServer, 
-                    Dir, 
+                    Dir,
+                    LogDir, 
                     TracingNode,
                     RunningProcs)
             end),
@@ -99,10 +101,10 @@ trace_1(InitialCall, PidAnswer, Opts) ->
         all_done ->
             receive
                 {result,Result} ->
-                io:format("\nExecution result: ~p\n",[Result])
+                cauder_logger:append_data(LogResult, io_lib:fwrite("Execution result: ~p\n", [Result]))
             end;
         idle ->
-            io:format("\nTracing timeout\n")
+            cauder_logger:append_data(LogResult, io_lib:fwrite("Tracing timeout\n", []))
     end,
     unregister(edd_tracer),
     PidTrace!stop,
@@ -119,7 +121,7 @@ trace_1(InitialCall, PidAnswer, Opts) ->
         end,
     PidAnswer!{Trace}.
 
-receive_loop(Current, Trace, Loaded, PidMain, Timeout, Dir, TracingNode, RunningProcs) ->
+receive_loop(Current, Trace, Loaded, PidMain, Timeout, Dir, LogDir, TracingNode, RunningProcs) ->
     % io:format("Itera\n"),
     receive 
         TraceItem = {edd_trace, _, _, _} ->
@@ -136,19 +138,6 @@ receive_loop(Current, Trace, Loaded, PidMain, Timeout, Dir, TracingNode, Running
                     _ -> 
                         TraceItem
                 end,
-            NRunningProcs =
-                case TraceItem of
-                    {edd_trace, made_spawn, _, {SpPid}} ->
-                      [SpPid | RunningProcs];
-                    {edd_trace, proc_done, PidDone, _} ->
-                      lists:delete(PidDone, RunningProcs);
-                    _ ->
-                        RunningProcs
-                end,
-            case NRunningProcs of
-                [] -> PidMain ! all_done;
-                _ -> continue
-            end,
             NTrace =
                 case TraceItem of
                     {edd_trace, proc_done, _, _} ->
@@ -156,11 +145,29 @@ receive_loop(Current, Trace, Loaded, PidMain, Timeout, Dir, TracingNode, Running
                     _ ->
                         [NTraceItem | Trace]
                 end,
+            NRunningProcs =
+                case TraceItem of
+                    {edd_trace, made_spawn, _, {SpPid}} ->
+                      LogItem = {SpPid, cauder_logger:init_log_file(LogDir, SpPid)},
+                      [LogItem | RunningProcs];
+                    {edd_trace, proc_done, PidDone, _} ->
+                      LogHandler = proplists:get_value(PidDone, RunningProcs),
+                      cauder_logger:append_pid_data(LogHandler, NTrace, PidDone),
+                      cauder_logger:stop_log_file(LogHandler),
+                      lists:delete({PidDone, LogHandler}, RunningProcs);
+                    _ ->
+                        RunningProcs
+                end,
+            case NRunningProcs of
+                [] -> PidMain ! all_done;
+                _ -> continue
+            end,
+
             % io:format("~p~n", [NRunningProcs]),
             receive_loop(
                 Current + 1, 
                 NTrace,
-                Loaded, PidMain, Timeout, Dir, TracingNode, NRunningProcs);
+                Loaded, PidMain, Timeout, Dir, LogDir, TracingNode, NRunningProcs);
         {edd_load_module, Module, PidAnswer} ->
             % io:format("Load module " ++ atom_to_list(Module) ++ "\n"),
             NLoaded = 
@@ -171,19 +178,27 @@ receive_loop(Current, Trace, Loaded, PidMain, Timeout, Dir, TracingNode, Running
                     false ->
                        instrument_and_reload(Module, Dir, TracingNode),
                        PidAnswer!loaded,
-                       [Module | Loaded] 
+                       [Module | Loaded]
                 end, 
-            receive_loop(Current, Trace, NLoaded, PidMain, Timeout, Dir, TracingNode, RunningProcs);
-        stop -> 
+            receive_loop(Current, Trace, NLoaded, PidMain, Timeout, Dir, LogDir, TracingNode, RunningProcs);
+        stop ->
             PidMain!{trace, Trace},
             PidMain!{loaded, Loaded};
         Other -> 
             io:format("Untracked msg ~p\n", [Other]),
-            receive_loop(Current, Trace, Loaded, PidMain, Timeout, Dir, TracingNode, RunningProcs)
+            receive_loop(Current, Trace, Loaded, PidMain, Timeout, Dir, LogDir, TracingNode, RunningProcs)
     after 
         Timeout ->
+            IdlePids = [Pid || {Pid, _} <- RunningProcs],
+            [
+             begin
+                LogHandler =
+                    proplists:get_value(IdlePid, RunningProcs),
+                    cauder_logger:append_pid_data(LogHandler, Trace, IdlePid),
+                    cauder_logger:stop_log_file(LogHandler)
+             end || IdlePid <- IdlePids],
             PidMain!idle,
-            receive_loop(Current, Trace, Loaded, PidMain, Timeout, Dir, TracingNode, RunningProcs)
+            receive_loop(Current, Trace, Loaded, PidMain, Timeout, Dir, LogDir, TracingNode, RunningProcs)
     end.
 
 send_module(TracingNode, Module, Dir) ->
