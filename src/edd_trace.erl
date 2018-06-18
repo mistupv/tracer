@@ -42,11 +42,15 @@ trace(InitialCall, PidAnswer, Opts) ->
             true -> NOpts0;
             false -> [{dir, "."} | NOpts0]
         end,
-    trace_1(InitialCall, PidAnswer, NOpts1).
+    NOpts2 =
+        case proplists:is_defined(mods, NOpts1) of
+            true -> NOpts1;
+            false -> [{mods, []} | NOpts1]
+        end,
+    trace_1(InitialCall, PidAnswer, NOpts2).
 
 trace_1(InitialCall, PidAnswer, Opts) ->
     ModName = get_mod_name(InitialCall),
-    put(modules_to_instrument,[]),
     {ok, TracingNode} = 
         slave:start(
             list_to_atom(net_adm:localhost()), 
@@ -54,6 +58,8 @@ trace_1(InitialCall, PidAnswer, Opts) ->
             "-setcookie edd_cookie"),
     Timeout = proplists:get_value(timeout, Opts),
     Dir     = proplists:get_value(dir,     Opts),
+    Mods    = proplists:get_value(mods,    Opts),
+    put(modules_to_instrument, Mods),
     % io:format("~p\n", [SO]),
     % io:format("~p\n~p\n", [ModName, Dir]),
     % OriginalLibCode = 
