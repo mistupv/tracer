@@ -250,6 +250,7 @@ instrument_and_reload_gen(ModName, Dir, CompileOpts, Msg, TracingNode) ->
             %      [{parse_transform,edd_con_pt}, binary, {i,Dir}, {outdir,Dir}, return],
             io:format("~s~p\n", [Msg, get_file_path(ModName, Dir)]),
             % io:format("~p\n", [CompileOpts]),
+            InitTime = erlang:monotonic_time(),
             {ok,ModName,Binary,_} = 
                 case compile:file(get_file_path(ModName, Dir), CompileOpts) of 
                     {ok,_,_,_} = Res ->
@@ -263,7 +264,9 @@ instrument_and_reload_gen(ModName, Dir, CompileOpts, Msg, TracingNode) ->
                     %     io:format("~p\n", [Res]),
                     %     Res 
                 end,
-
+            EndTime =  erlang:monotonic_time(),
+            DiffTime = erlang:convert_time_unit(EndTime - InitTime, native, microsecond),
+            io:format("~p~n", [DiffTime]),
                 % io:format("~p\n", [get_file_path(ModName, Dir)]),
                 % io:format("~p\n", [filename:find_src(ModName)]),
                 % io:format("~p\n", [ file:get_cwd()]),
