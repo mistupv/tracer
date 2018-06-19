@@ -29,6 +29,7 @@
 % TODO: Treat correctly errors to be considered as a value
 parse_transform(Forms, Opts) ->
 	put(modules_to_instrument, hd([InsMod0 || {inst_mod, InsMod0} <- Opts])),
+	put(cur_dir, hd([Dir0 || {i, Dir0} <- Opts])),
 	put(free, 0),
 	ModFileName = 
 		lists:sort(
@@ -48,7 +49,8 @@ parse_transform(Forms, Opts) ->
 				 Form) 
 		|| Form <- Forms],
 	RForms = erl_syntax:revert_forms(NForms),
-	% {ok, File} = file:open("./inst_forms.erl", [write]), 
+	% {file_name,{tree,string,{attr,0,[],none},FileName}} = hd(ModFileName),
+	% {ok, File} = file:open("./inst_" ++ FileName, [write]), 
 	% [io:format(File, "~s", [erl_pp:form(RForm)]) || RForm <- RForms],
 	RForms.
 
@@ -181,27 +183,18 @@ inst_call_loading(T, ModName) ->
 		erl_syntax:application(
 			erl_syntax:atom(code), 
 			erl_syntax:atom(where_is_file), 
-			[erl_syntax:infix_expr(
-				erl_syntax:application(
-					erl_syntax:atom(erlang),
-					erl_syntax:atom(atom_to_list),
-					[ModName]), 
-				erl_syntax:operator("++"), 
-				erl_syntax:string(".erl"))]),
+			[erl_syntax:list([erl_syntax:string(get(cur_dir))]),
+			erl_syntax:infix_expr(
+					erl_syntax:application(
+						erl_syntax:atom(erlang),
+						erl_syntax:atom(atom_to_list),
+						[ModName]), 
+					erl_syntax:operator("++"), 
+					erl_syntax:string(".erl"))]),
 		[
 			% TODO: try to load also from src directory
 			erl_syntax:clause(
-				[erl_syntax:cons(
-					erl_syntax:char($.), 
-					erl_syntax:underscore())] ,
-				[],
-				[	
-					build_send_load(ModName),
-					build_receive_load(),
-					T
-				]),
-			erl_syntax:clause(
-				[erl_syntax:underscore()],
+				[erl_syntax:atom(non_existing)],
 				[],
 				[	
 					erl_syntax:case_expr(
@@ -226,6 +219,14 @@ inst_call_loading(T, ModName) ->
 									T
 								])
 						])
+				]),
+			erl_syntax:clause(
+				[erl_syntax:underscore()] ,
+				[],
+				[	
+					build_send_load(ModName),
+					build_receive_load(),
+					T
 				])
 		]).
 
