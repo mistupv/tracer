@@ -85,6 +85,7 @@ trace_1(InitialCall, PidAnswer, Opts) ->
             fun() ->
                 put(modules_to_instrument, InstMod),
                 put(lambda, 0),
+                put(log_handler, LogHandler),
                 receive_loop(
                     0, 
                     [],
@@ -287,9 +288,9 @@ instrument_and_reload_gen(ModName, Dir, CompileOpts, Msg, TracingNode) ->
                     %     io:format("~p\n", [Res]),
                     %     Res 
                 end,
-            EndTime =  erlang:monotonic_time(),
-            DiffTime = erlang:convert_time_unit(EndTime - InitTime, native, microsecond),
-            logger:append_data(io_lib:fwrite("inst ~p ~p~n", [FilePath, DiffTime])),
+                EndTime =  erlang:monotonic_time(),
+                DiffTime = erlang:convert_time_unit(EndTime - InitTime, native, microsecond),
+                logger:append_data(io_lib:fwrite("inst ~p ~p~n", [FilePath, DiffTime])),
                 % io:format("~p\n", [get_file_path(ModName, Dir)]),
                 % io:format("~p\n", [filename:find_src(ModName)]),
                 % io:format("~p\n", [ file:get_cwd()]),
@@ -307,21 +308,26 @@ instrument_and_reload_sticky(ModName, _UserDir, CompileOpts, Msg, TracingNode) -
         code:lib_dir(stdlib, src),
     BeamDir = 
         code:lib_dir(stdlib, ebin),
-    FileName = 
+    FilePath = 
         get_file_path(ModName, LibDir),
     % CompileOpts = 
     %     [{parse_transform,edd_con_pt}, binary, 
     %      {i, UserDir}, {outdir, UserDir}, return],
-    io:format("~s~p\n", [Msg, FileName]),
+    io:format("~s~p\n", [Msg, FilePath]),
+    InitTime = erlang:monotonic_time(),
     {ok, ModName, Binary,_} = 
-        case compile:file(FileName, CompileOpts) of 
+        case compile:file(FilePath, CompileOpts) of 
             {ok,_,_,_} = Res ->
                 Res;
             Other ->
                 io:format("~p\n", [Other])
         end,
+    EndTime =  erlang:monotonic_time(),
+    DiffTime = erlang:convert_time_unit(EndTime - InitTime, native, microsecond),
+    logger:append_data(io_lib:fwrite("inst ~p ~p~n", [FilePath, DiffTime])),
     % ok = 
     %     code:unstick_dir(BeamDir),
+    %% TODO: Tracer gets stuck from here
     rpc:call(
         TracingNode, code, unstick_dir, [BeamDir]),
     reload_module(ModName, Binary, TracingNode),
