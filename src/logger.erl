@@ -1,7 +1,7 @@
 -module(logger).
 
 -export([init_log_dir/1, init_log_file/2, stop_log_file/1,
-         append_data/2, append_pid_data/3]).
+         append_data/1, append_pid_data/3]).
 
 init_log_dir(Dir) ->
   file:make_dir(Dir),
@@ -24,8 +24,9 @@ init_log_file(Dir, Pid) ->
       error
   end.
 
-append_data(FileHandler, Data) ->
-  file:write(FileHandler, Data).
+append_data(Data) ->
+  LogHandler = get(log_handler),
+  file:write(LogHandler, Data).
 
 append_pid_data(FileHandler, Items, Pid) ->
   PidItems = [ Item || {P, _, _} = Item <- Items, P == Pid ],
