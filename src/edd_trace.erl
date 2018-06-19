@@ -99,6 +99,7 @@ trace_1(InitialCall, PidAnswer, Opts) ->
             end),
     register(edd_tracer, PidTrace),
     PidCall!start,
+    InitTime = erlang:monotonic_time(),
     receive 
         all_done ->
             receive
@@ -108,6 +109,9 @@ trace_1(InitialCall, PidAnswer, Opts) ->
         idle ->
             logger:append_data(io_lib:fwrite("tracing timeout~nresult none~n", []))
     end,
+    EndTime =  erlang:monotonic_time(),
+    DiffTime = erlang:convert_time_unit(EndTime - InitTime, native, microsecond),
+    logger:append_data(io_lib:fwrite("exec ~p~n", [DiffTime])),
     unregister(edd_tracer),
     PidTrace!stop,
     slave:stop(TracingNode),
