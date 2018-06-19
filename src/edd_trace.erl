@@ -73,8 +73,8 @@ trace_1(InitialCall, PidAnswer, Opts) ->
     instrument_and_reload(ModName, Dir, TracingNode),
     PidMain = self(),
     PidCall = execute_call(InitialCall, self(), Dir, TracingNode),
-    LogResult = cauder_logger:init_log_dir(LogDir),
-    RunningProcs = [{PidCall, cauder_logger:init_log_file(LogDir, PidCall)}],
+    LogResult = logger:init_log_dir(LogDir),
+    RunningProcs = [{PidCall, logger:init_log_file(LogDir, PidCall)}],
     % io:format("PIDCALL: ~p\n", [PidCall]),
     TimeoutServer = Timeout,
     InstMod = 
@@ -101,10 +101,10 @@ trace_1(InitialCall, PidAnswer, Opts) ->
         all_done ->
             receive
                 {result,Result} ->
-                cauder_logger:append_data(LogResult, io_lib:fwrite("Execution result: ~p\n", [Result]))
+                logger:append_data(LogResult, io_lib:fwrite("Execution result: ~p\n", [Result]))
             end;
         idle ->
-            cauder_logger:append_data(LogResult, io_lib:fwrite("Tracing timeout\n", []))
+            logger:append_data(LogResult, io_lib:fwrite("Tracing timeout\n", []))
     end,
     unregister(edd_tracer),
     PidTrace!stop,
@@ -148,12 +148,12 @@ receive_loop(Current, Trace, Loaded, PidMain, Timeout, Dir, LogDir, TracingNode,
             NRunningProcs =
                 case TraceItem of
                     {edd_trace, made_spawn, _, {SpPid}} ->
-                      LogItem = {SpPid, cauder_logger:init_log_file(LogDir, SpPid)},
+                      LogItem = {SpPid, logger:init_log_file(LogDir, SpPid)},
                       [LogItem | RunningProcs];
                     {edd_trace, proc_done, PidDone, _} ->
                       LogHandler = proplists:get_value(PidDone, RunningProcs),
-                      cauder_logger:append_pid_data(LogHandler, NTrace, PidDone),
-                      cauder_logger:stop_log_file(LogHandler),
+                      logger:append_pid_data(LogHandler, NTrace, PidDone),
+                      logger:stop_log_file(LogHandler),
                       lists:delete({PidDone, LogHandler}, RunningProcs);
                     _ ->
                         RunningProcs
@@ -194,8 +194,8 @@ receive_loop(Current, Trace, Loaded, PidMain, Timeout, Dir, LogDir, TracingNode,
              begin
                 LogHandler =
                     proplists:get_value(IdlePid, RunningProcs),
-                    cauder_logger:append_pid_data(LogHandler, Trace, IdlePid),
-                    cauder_logger:stop_log_file(LogHandler)
+                    logger:append_pid_data(LogHandler, Trace, IdlePid),
+                    logger:stop_log_file(LogHandler)
              end || IdlePid <- IdlePids],
             PidMain!idle,
             receive_loop(Current, Trace, Loaded, PidMain, Timeout, Dir, LogDir, TracingNode, RunningProcs)

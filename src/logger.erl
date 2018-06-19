@@ -1,4 +1,4 @@
--module(cauder_logger).
+-module(logger).
 
 -export([init_log_dir/1, init_log_file/2, stop_log_file/1,
          append_data/2, append_pid_data/3]).
@@ -41,5 +41,4 @@ stop_log_file(FileHandler) ->
 get_filename(Dir, Pid) ->
   PidStr = pid_to_list(Pid),
   FullName = Dir ++ "/trace_" ++ PidStr ++ ".log",
-  io:format("~s~n", [FullName]),
   FullName.
