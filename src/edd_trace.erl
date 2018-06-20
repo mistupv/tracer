@@ -68,6 +68,7 @@ trace_1(InitialCall, PidAnswer, Opts) ->
     put(modules_to_instrument, Mods),
     LogHandler = logger:init_log_dir(LogDir),
     put(log_handler, LogHandler),
+    logger:append_data(io_lib:fwrite("call ~p~n", [InitialCall])),
     % io:format("~p\n", [SO]),
     % io:format("~p\n~p\n", [ModName, Dir]),
     % OriginalLibCode = 
