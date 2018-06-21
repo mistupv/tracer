@@ -1,4 +1,4 @@
 make
-erl -sname edd_main -setcookie edd_cookie -pa ebin
-# put(modules_to_instrument,[]),edd_trace:trace("client_server:main()",10000,self(),".").
-# edd_trace:trace("client_server:main()", self(), [{dir, "examples"}]).
+erl -sname main -setcookie cookie -pa ebin
+# tracer:trace("acknowledge:main()", self(), [{dir,"examples"},{log_dir,"inst"}]).
+# wrapper:trace("acknowledge:main()", self(), [{dir,"examples"},{log_dir,"norm"}]).

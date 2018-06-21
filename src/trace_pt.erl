@@ -1,28 +1,4 @@
-%%%    Copyright (C) 2013 Salvador Tamarit <stamarit@dsic.upv.es>
-%%%    This file is part of Erlang Declarative Debugger.
-%%%
-%%%    Erlang Declarative Debugger is free software: you can redistribute it and/or modify
-%%%    it under the terms of the GNU General Public License as published by
-%%%    the Free Software Foundation, either version 3 of the License, or
-%%%    (at your option) any later version.
-%%%
-%%%    Erlang Declarative Debugger is distributed in the hope that it will be useful,
-%%%    but WITHOUT ANY WARRANTY; without even the implied warranty of
-%%%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-%%%    GNU General Public License for more details.
-%%%
-%%%    You should have received a copy of the GNU General Public License
-%%%    along with Erlang Declarative Debugger.  If not, see <http://www.gnu.org/licenses/>.
-
-%%%-----------------------------------------------------------------------------
-%%% @author Salvador Tamarit <stamarit@dsic.upv.es>
-%%% @copyright 2013 Salvador Tamarit
-%%% @version 0.1
-%%% @doc Erlang Declarative Debugger instrumentation for concurrent tracing
-%%% @end
-%%%-----------------------------------------------------------------------------
-
--module(edd_con_pt).
+-module(trace_pt).
 
 -export([parse_transform/2]).
 
@@ -260,7 +236,7 @@ inst_fun_clauses0(Clauses) ->
 inst_send(_T, SendArgs) ->
 
 	{VarArgs, StoreArgs} = 
-		args_assign("EDDSendArg", SendArgs),
+		args_assign("TRCSendArg", SendArgs),
 	SndVarArg = lists:nth(2, VarArgs),
 	SendSend = 
 		build_send_trace(
@@ -282,7 +258,7 @@ inst_send(_T, SendArgs) ->
 
 inst_spawn(T, SpawnArgs) ->
 	VarReceiveResult = 
-		free_named_var("EDDSpawnResult"),
+		free_named_var("TRCSpawnResult"),
 
 	NSpawnArgs =
 		case SpawnArgs of
@@ -310,7 +286,7 @@ inst_spawn(T, SpawnArgs) ->
 inst_receive_clause(Clause, InstInfo) ->
 	{CurrentClause, LambdaVar} = InstInfo,
 	{ [_VarMsg], Patterns} = 
-		args_assign("EDDMsg", erl_syntax:clause_patterns(Clause)),
+		args_assign("TRCMsg", erl_syntax:clause_patterns(Clause)),
 
 	SendEvaluated =
 		build_send_trace(
@@ -335,7 +311,7 @@ build_send_par(Dest, Pars) ->
 build_send(Msg) ->
 	build_send_par(
 		erl_syntax:tuple([
-			erl_syntax:atom(edd_tracer),
+			erl_syntax:atom(tracer),
 			erl_syntax:atom(node())
 		]),
 		[erl_syntax:tuple(Msg)]).
@@ -343,7 +319,7 @@ build_send(Msg) ->
 build_send_trace(Tag, Args) -> 
 	build_send(
 		[
-	 		erl_syntax:atom(edd_trace),
+	 		erl_syntax:atom(trace),
 	 		erl_syntax:atom(Tag),
 	 		erl_syntax:application(
 	 			erl_syntax:atom(erlang) , 
@@ -355,7 +331,7 @@ build_send_trace(Tag, Args) ->
 build_send_load(Module) -> 
 	build_send(
 		[
-	 		erl_syntax:atom(edd_load_module),
+	 		erl_syntax:atom(load_module),
 	 		Module,
 	 		erl_syntax:application(
 	 			erl_syntax:atom(erlang) , 

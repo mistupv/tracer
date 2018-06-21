@@ -1,30 +1,4 @@
-%%%    Copyright (C) 2013 Enrique Martin-Martin <emartinm@fdi.ucm.es>
-%%%    This file is part of Erlang Declarative Debugger.
-%%%
-%%%    Erlang Declarative Debugger is free software: you can redistribute it and/or modify
-%%%    it under the terms of the GNU General Public License as published by
-%%%    the Free Software Foundation, either version 3 of the License, or
-%%%    (at your option) any later version.
-%%%
-%%%    Erlang Declarative Debugger is distributed in the hope that it will be useful,
-%%%    but WITHOUT ANY WARRANTY; without even the implied warranty of
-%%%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-%%%    GNU General Public License for more details.
-%%%
-%%%    You should have received a copy of the GNU General Public License
-%%%    along with Erlang Declarative Debugger.  If not, see <http://www.gnu.org/licenses/>.
-
-%%%-----------------------------------------------------------------------------
-%%% @author Salvador Tamarit <stamarit@dsic.upv.es>
-%%% @copyright 2013 Salvador Tamarit
-%%% @version 0.1
-%%% @doc Erlang Declarative Debugger tracer
-%%% @end
-%%%-----------------------------------------------------------------------------
-
-% TODO: We should instrument the arguments of the initial call (p.e. if it is a fun_expr)
-
--module(edd_trace).
+-module(tracer).
 
 -export([trace/2, trace/3]).
 
@@ -59,8 +33,8 @@ trace_1(InitialCall, PidAnswer, Opts) ->
     {ok, TracingNode} = 
         slave:start(
             list_to_atom(net_adm:localhost()), 
-            edd_tracing, 
-            "-setcookie edd_cookie"),
+            tracing, 
+            "-setcookie cookie"),
     Timeout = proplists:get_value(timeout, Opts),
     Dir     = proplists:get_value(dir,     Opts),
     Mods    = proplists:get_value(mods,    Opts),
@@ -98,7 +72,7 @@ trace_1(InitialCall, PidAnswer, Opts) ->
                     TracingNode,
                     RunningProcs)
             end),
-    register(edd_tracer, PidTrace),
+    register(tracer, PidTrace),
     PidCall!start,
     InitTime = erlang:monotonic_time(),
     receive 
@@ -113,7 +87,7 @@ trace_1(InitialCall, PidAnswer, Opts) ->
     EndTime =  erlang:monotonic_time(),
     DiffTime = erlang:convert_time_unit(EndTime - InitTime, native, microsecond),
     logger:append_data(io_lib:fwrite("exec ~p~n", [DiffTime])),
-    unregister(edd_tracer),
+    unregister(tracer),
     PidTrace!stop,
     slave:stop(TracingNode),
     Trace = 
@@ -129,35 +103,34 @@ trace_1(InitialCall, PidAnswer, Opts) ->
     PidAnswer!{Trace}.
 
 receive_loop(Current, Trace, Loaded, PidMain, Timeout, Dir, LogDir, TracingNode, RunningProcs) ->
-    % io:format("Itera\n"),
     receive 
-        TraceItem = {edd_trace, _, _, _} ->
+        TraceItem = {trace, _, _, _} ->
             NTraceItem =
                 case TraceItem of 
-                    {edd_trace, send_sent, Pid, _} ->
+                    {trace, send_sent, Pid, _} ->
                         Lambda = get_lambda(),
                         Pid ! {lambda, Lambda},
                         {Pid, send, Lambda};
-                    {edd_trace, made_spawn, Pid, {SpawnPid}} ->
+                    {trace, made_spawn, Pid, {SpawnPid}} ->
                         {Pid, spawn, SpawnPid};
-                    {edd_trace,receive_evaluated, Pid, {Lambda}} ->
+                    {trace,receive_evaluated, Pid, {Lambda}} ->
                         {Pid, 'receive', Lambda};
                     _ -> 
                         TraceItem
                 end,
             NTrace =
                 case TraceItem of
-                    {edd_trace, proc_done, _, _} ->
+                    {trace, proc_done, _, _} ->
                         Trace;
                     _ ->
                         [NTraceItem | Trace]
                 end,
             NRunningProcs =
                 case TraceItem of
-                    {edd_trace, made_spawn, _, {SpPid}} ->
+                    {trace, made_spawn, _, {SpPid}} ->
                       LogItem = {SpPid, logger:init_log_file(LogDir, SpPid)},
                       [LogItem | RunningProcs];
-                    {edd_trace, proc_done, PidDone, _} ->
+                    {trace, proc_done, PidDone, _} ->
                       LogHandler = proplists:get_value(PidDone, RunningProcs),
                       logger:append_pid_data(LogHandler, NTrace, PidDone),
                       logger:stop_log_file(LogHandler),
@@ -175,7 +148,7 @@ receive_loop(Current, Trace, Loaded, PidMain, Timeout, Dir, LogDir, TracingNode,
                 Current + 1, 
                 NTrace,
                 Loaded, PidMain, Timeout, Dir, LogDir, TracingNode, NRunningProcs);
-        {edd_load_module, Module, PidAnswer} ->
+        {load_module, Module, PidAnswer} ->
             % io:format("Load module " ++ atom_to_list(Module) ++ "\n"),
             NLoaded = 
                 case lists:member(Module, Loaded) of 
@@ -230,7 +203,7 @@ execute_call(Call, PidParent, _Dir, TracingNode) ->
             M1 = smerl:new(foo),
             {ok, M2} = 
                 smerl:add_func(M1, "bar() -> try MainRes = " ++ Call ++
-                                   ", {edd_tracer, '" ++ MainNodeStr ++ "'} ! {edd_trace, proc_done, self(), {}}," ++
+                                   ", {tracer, '" ++ MainNodeStr ++ "'} ! {trace, proc_done, self(), {}}," ++
                                    "MainRes catch E1:E2 -> {E1,E2} end."),
             smerl:compile(M2,[nowarn_format]),
             receive 
@@ -262,7 +235,7 @@ get_file_path(ModName, Dir) ->
 
 instrument_and_reload(ModName, Dir, TracingNode) ->
     CompileOpts = 
-        [{parse_transform,edd_con_pt}, binary, {i,Dir}, {outdir,Dir}, return, {inst_mod, get(modules_to_instrument)}],
+        [{parse_transform, trace_pt}, binary, {i,Dir}, {outdir,Dir}, return, {inst_mod, get(modules_to_instrument)}],
     Msg = 
         "Instrumenting...",
     instrument_and_reload_gen(ModName, Dir, CompileOpts, Msg, TracingNode).
@@ -273,9 +246,6 @@ instrument_and_reload_gen(ModName, Dir, CompileOpts, Msg, TracingNode) ->
         true -> 
             instrument_and_reload_sticky(ModName, Dir, CompileOpts, Msg, TracingNode);
         false -> 
-            % try 
-            % CompileOpts = 
-            %      [{parse_transform,edd_con_pt}, binary, {i,Dir}, {outdir,Dir}, return],
             FilePath = get_file_path(ModName, Dir),
             io:format("~s~p~n", [Msg, FilePath]),
             % io:format("~p\n", [CompileOpts]),
@@ -315,9 +285,6 @@ instrument_and_reload_sticky(ModName, _UserDir, CompileOpts, Msg, TracingNode) -
         code:lib_dir(stdlib, ebin),
     FilePath = 
         get_file_path(ModName, LibDir),
-    % CompileOpts = 
-    %     [{parse_transform,edd_con_pt}, binary, 
-    %      {i, UserDir}, {outdir, UserDir}, return],
     io:format("~s~p\n", [Msg, FilePath]),
     InitTime = erlang:monotonic_time(),
     {ok, ModName, Binary,_} = 
