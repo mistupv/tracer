@@ -36,6 +36,7 @@ trace_1(InitialCall, PidAnswer, Opts) ->
     %     [code:get_object_code(Mod) || Mod <- [gen_server, supervisor, gen_fsm, proc_lib, gen]],
     instrument_and_reload(ModName, Dir, TracingNode),
     PidCall = execute_call(InitialCall, self(), Dir, TracingNode),
+    logger:append_data(io_lib:fwrite("main_pid ~p~n", [PidCall])),
     PidCall!start,
     InitTime = erlang:monotonic_time(),
     receive 

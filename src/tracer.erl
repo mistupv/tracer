@@ -50,6 +50,7 @@ trace_1(InitialCall, PidAnswer, Opts) ->
     instrument_and_reload(ModName, Dir, TracingNode),
     PidMain = self(),
     PidCall = execute_call(InitialCall, self(), Dir, TracingNode),
+    logger:append_data(io_lib:fwrite("main_pid ~p~n", [PidCall])),
     RunningProcs = [{PidCall, logger:init_log_file(LogDir, PidCall)}],
     % io:format("PIDCALL: ~p\n", [PidCall]),
     TimeoutServer = Timeout,
