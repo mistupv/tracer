@@ -14,8 +14,8 @@ server_fun(Main_PID, Port, Seq) ->
       Client_PID ! {Ack_PID, {syn_ack, SeqCl+1, Seq}}, 
       server_fun(Main_PID, Port, Seq+1);
     {Client_PID, {syn, _, _}} ->
-      Client_PID ! rst%, server_fun(Main_PID,Port,Seq+1) % BUG
-      %Client_PID ! rst, server_fun(Main_PID,Port,Seq+1) % OK
+      % Client_PID ! rst%, server_fun(Main_PID,Port,Seq+1) % BUG
+      Client_PID ! rst, server_fun(Main_PID,Port,Seq+1) % OK
   end. 
 
 ack(Main_PID, Port, Ack, Seq, Client_PID) -> 
@@ -35,8 +35,8 @@ syn_ack(Port, Data, Ack) ->
   receive 
     rst -> {port_rejected, Port} ; 
     {Ack_PID, {syn_ack, Ack, Seq}} -> 
-      Ack_PID ! {self(),  {Ack, Port, Seq+1, ack}}, % BUG
-      %Ack_PID ! {self(), {ack, Port, Seq+1, Ack}}, % OK
+      % Ack_PID ! {self(),  {Ack, Port, Seq+1, ack}}, % BUG
+      Ack_PID ! {self(), {ack, Port, Seq+1, Ack}}, % OK
       Ack_PID ! {self(), {data, Port, Data}},
       {Seq+1, Ack, Port, Data}
   end. 

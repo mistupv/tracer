@@ -50,8 +50,8 @@ merge([H1 | T1], [H2 | T2])  ->
 take(0,_) -> [];
 take(1,[H|_])->[H];
 take(_,[])->[];
-% take(N,[H|T])->[H | take(N-1, T)]. % Correct
-take(N,[_|T])->[N | take(N-1, T)].   % Incorrect
+take(N,[H|T])->[H | take(N-1, T)]. % Correct
+% take(N,[_|T])->[N | take(N-1, T)].   % Incorrect
 
 last(N, List) ->
 lists:reverse(take(N, lists:reverse(List))).
