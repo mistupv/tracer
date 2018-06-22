@@ -78,12 +78,20 @@ trace_1(InitialCall, PidAnswer, Opts) ->
     InitTime = erlang:monotonic_time(),
     receive 
         all_done ->
+            logger:append_data(io_lib:fwrite("tracing success~n", [])),
             receive
                 {result,Result} ->
-                logger:append_data(io_lib:fwrite("tracing success~nresult ~p~n", [Result]))
+                    logger:append_data(io_lib:fwrite("result ~p~n", [Result]))
             end;
         idle ->
-            logger:append_data(io_lib:fwrite("tracing timeout~nresult none~n", []))
+            logger:append_data(io_lib:fwrite("tracing timeout~n", [])),
+            receive
+                {result,Result} ->
+                    logger:append_data(io_lib:fwrite("result ~p~n", [Result]))
+                after
+                    0 ->
+                        logger:append_data(io_lib:fwrite("result none~n", []))
+            end
     end,
     EndTime =  erlang:monotonic_time(),
     DiffTime = erlang:convert_time_unit(EndTime - InitTime, native, microsecond),
