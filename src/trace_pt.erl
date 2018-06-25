@@ -259,27 +259,29 @@ inst_send(_T, SendArgs) ->
 	BlockSend.
 
 inst_spawn(T, SpawnArgs) ->
+
+	NSpawnArgs =
+		case SpawnArgs of
+			[Fun] ->
+					NFunClauses =
+						inst_fun_clauses0(erl_syntax:fun_expr_clauses(Fun)),
+					[erl_syntax:fun_expr(NFunClauses)];
+			_ ->
+				Call = erl_syntax:application(erl_syntax:atom(erlang),erl_syntax:atom(apply), SpawnArgs),
+				[erl_syntax:fun_expr([erl_syntax:clause([],[],[Call, build_send_trace(proc_done, [])])])]
+		end,
+
 	{VarArgs, StoreArgs} = 
-		args_assign("SpawnArg", SpawnArgs),
+		args_assign("SpawnArg", NSpawnArgs),
 
 	VarReceiveResult =
 		free_named_var("TRCSpawnResult"),
-
-	NSpawnArgs =
-		case VarArgs of
-			[Fun] ->
-					NFunClauses = inst_fun_clauses0(erl_syntax:fun_expr_clauses(Fun)),
-					[erl_syntax:fun_expr(NFunClauses)];
-			_ ->
-				Call = erl_syntax:application(erl_syntax:atom(erlang),erl_syntax:atom(apply), VarArgs),
-				[erl_syntax:fun_expr([erl_syntax:clause([],[],[Call, build_send_trace(proc_done, [])])])]
-		end,
 
 	SendSpawn = 
 		build_send_trace(made_spawn, [VarReceiveResult]),
 
 	SpawnCall = 
-		erl_syntax:application(erl_syntax:application_operator(T), NSpawnArgs),
+		erl_syntax:application(erl_syntax:application_operator(T), VarArgs),
 
 	NT = 
 		erl_syntax:match_expr(VarReceiveResult, SpawnCall), 
