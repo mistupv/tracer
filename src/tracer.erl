@@ -60,7 +60,7 @@ trace_1(InitialCall, PidAnswer, Opts) ->
         spawn(
             fun() ->
                 put(modules_to_instrument, InstMod),
-                put(lambda, 0),
+                put(stamp, 0),
                 put(log_handler, LogHandler),
                 receive_loop(
                     0, 
@@ -117,13 +117,13 @@ receive_loop(Current, Trace, Loaded, PidMain, Timeout, Dir, LogDir, TracingNode,
             NTraceItem =
                 case TraceItem of 
                     {trace, send_sent, Pid, _} ->
-                        Lambda = get_lambda(),
-                        Pid ! {lambda, Lambda},
-                        {Pid, send, Lambda};
+                        Stamp = get_stamp(),
+                        Pid ! {stamp, Stamp},
+                        {Pid, send, Stamp};
                     {trace, made_spawn, Pid, {SpawnPid}} ->
                         {Pid, spawn, SpawnPid};
-                    {trace,receive_evaluated, Pid, {Lambda}} ->
-                        {Pid, 'receive', Lambda};
+                    {trace,receive_evaluated, Pid, {Stamp}} ->
+                        {Pid, 'receive', Stamp};
                     _ -> 
                         TraceItem
                 end,
@@ -354,7 +354,7 @@ parse_expr(Func) ->
             {error, parse_error}
     end.
 
-get_lambda() ->
-    Lambda = get(lambda),
-    put(lambda, Lambda + 1),
-    Lambda.
+get_stamp() ->
+    Stamp = get(stamp),
+    put(stamp, Stamp + 1),
+    Stamp.

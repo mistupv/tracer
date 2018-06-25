@@ -71,11 +71,11 @@ inst_expr(T) ->
 		case erl_syntax:type(T) of 
 			receive_expr ->
 				Clauses = erl_syntax:receive_expr_clauses(T),
-				LambdaVar = free_named_var("LambdaRec"),
+				StampVar = free_named_var("StampRec"),
 				{NClauses,_} = 
 					lists:mapfoldl(
 						fun inst_receive_clause/2, 
-						{1, LambdaVar},
+						{1, StampVar},
 						Clauses),
 				NReceive = 
 					erl_syntax:receive_expr(
@@ -249,17 +249,17 @@ inst_send(_T, SendArgs) ->
 			send_sent,
 			[]),
 
-	{RecLambda, LambdaVar} =
-		build_rec_lambda(),
+	{RecStamp, StampVar} =
+		build_rec_stamp(),
 
-	SendWithLambda =
-		build_send_lambda(
+	SendWithStamp =
+		build_send_stamp(
 			hd(VarArgs),
 			SndVarArg,
-			LambdaVar),
+			StampVar),
  
 	BlockSend = 
-		erl_syntax:block_expr(StoreArgs ++ [SendSend, RecLambda, SendWithLambda, SndVarArg]),
+		erl_syntax:block_expr(StoreArgs ++ [SendSend, RecStamp, SendWithStamp, SndVarArg]),
 	BlockSend.
 
 inst_spawn(T, SpawnArgs) ->
@@ -322,23 +322,23 @@ inst_spawn_3(T, SpawnArgs) ->
 	BlockSpawn.
 
 inst_receive_clause(Clause, InstInfo) ->
-	{CurrentClause, LambdaVar} = InstInfo,
+	{CurrentClause, StampVar} = InstInfo,
 	{ [_VarMsg], Patterns} = 
 		args_assign("TRCMsg", erl_syntax:clause_patterns(Clause)),
 
 	SendEvaluated =
 		build_send_trace(
 			receive_evaluated, 
-			[LambdaVar]),
+			[StampVar]),
  
 	NBody = 
 		[SendEvaluated] ++ erl_syntax:clause_body(Clause),
 
-	NPatterns = [erl_syntax:tuple([LambdaVar| Patterns])],
+	NPatterns = [erl_syntax:tuple([StampVar| Patterns])],
 
 	NClause = 
 		erl_syntax:clause(NPatterns, erl_syntax:clause_guard(Clause), NBody),
-	{erl_syntax:set_ann(NClause, erl_syntax:get_ann(Clause) ), {CurrentClause + 1, LambdaVar}}.
+	{erl_syntax:set_ann(NClause, erl_syntax:get_ann(Clause) ), {CurrentClause + 1, StampVar}}.
 
 build_send_par(Dest, Pars) ->
 	erl_syntax:application(
@@ -377,11 +377,11 @@ build_send_trace(Tag, Args) ->
 % 				[])
 % 	 	] ).
 
-build_send_lambda(Pid, Msg, Lambda) ->
+build_send_stamp(Pid, Msg, Stamp) ->
 	build_send_par(
 		Pid,
 		[erl_syntax:tuple([
-			                 Lambda,
+			                 Stamp,
 											 Msg
 											])
 		]).
@@ -400,8 +400,8 @@ build_send_lambda(Pid, Msg, Lambda) ->
 % 		]
 % 	) .
 
-build_rec_lambda() ->
-	LambdaVar = free_named_var("Lambda"),
+build_rec_stamp() ->
+	StampVar = free_named_var("Stamp"),
 	RecExpr =
 		erl_syntax:receive_expr(
 			[
@@ -409,8 +409,8 @@ build_rec_lambda() ->
 					[
 					 erl_syntax:tuple(
 						  [
-						   erl_syntax:atom(lambda),
-						   LambdaVar
+						   erl_syntax:atom(stamp),
+						   StampVar
 						  ])
 					],
 					[],
@@ -418,7 +418,7 @@ build_rec_lambda() ->
 
 				)
 			]),
-	{RecExpr, LambdaVar}.
+	{RecExpr, StampVar}.
 
 get_free() ->
 	Free = get(free),
