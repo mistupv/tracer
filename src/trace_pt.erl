@@ -154,57 +154,61 @@ inst_expr(T) ->
 	Res = erl_syntax:set_ann(NT, erl_syntax:get_ann(T)),
 	Res. 
 
-inst_call_loading(T, ModName) ->
-	erl_syntax:case_expr(
-		erl_syntax:application(
-			erl_syntax:atom(code), 
-			erl_syntax:atom(where_is_file), 
-			[erl_syntax:list([erl_syntax:string(get(cur_dir))]),
-			erl_syntax:infix_expr(
-					erl_syntax:application(
-						erl_syntax:atom(erlang),
-						erl_syntax:atom(atom_to_list),
-						[ModName]), 
-					erl_syntax:operator("++"), 
-					erl_syntax:string(".erl"))]),
-		[
-			% TODO: try to load also from src directory
-			erl_syntax:clause(
-				[erl_syntax:atom(non_existing)],
-				[],
-				[	
-					erl_syntax:case_expr(
-						erl_syntax:application(
-							erl_syntax:atom(lists), 
-							erl_syntax:atom(member), 
-							[ModName,
-							 lists_with_modules_to_instument()]),
-						[
-							erl_syntax:clause(
-								[erl_syntax:atom(true)] ,
-								[],
-								[	
-									build_send_load(ModName),
-									build_receive_load(),
-									T
-								]),
-							erl_syntax:clause(
-								[erl_syntax:atom(false)] ,
-								[],
-								[	
-									T
-								])
-						])
-				]),
-			erl_syntax:clause(
-				[erl_syntax:underscore()] ,
-				[],
-				[	
-					build_send_load(ModName),
-					build_receive_load(),
-					T
-				])
-		]).
+% Comment this and uncomment next for module loading support
+inst_call_loading(T, _ModName) ->
+	T.
+% Uncomment for module loading support
+% inst_call_loading(T, ModName) ->
+	% erl_syntax:case_expr(
+	% 	erl_syntax:application(
+	% 		erl_syntax:atom(code), 
+	% 		erl_syntax:atom(where_is_file), 
+	% 		[erl_syntax:list([erl_syntax:string(get(cur_dir))]),
+	% 		erl_syntax:infix_expr(
+	% 				erl_syntax:application(
+	% 					erl_syntax:atom(erlang),
+	% 					erl_syntax:atom(atom_to_list),
+	% 					[ModName]), 
+	% 				erl_syntax:operator("++"), 
+	% 				erl_syntax:string(".erl"))]),
+	% 	[
+	% 		% TODO: try to load also from src directory
+	% 		erl_syntax:clause(
+	% 			[erl_syntax:atom(non_existing)],
+	% 			[],
+	% 			[	
+	% 				erl_syntax:case_expr(
+	% 					erl_syntax:application(
+	% 						erl_syntax:atom(lists), 
+	% 						erl_syntax:atom(member), 
+	% 						[ModName,
+	% 						 lists_with_modules_to_instument()]),
+	% 					[
+	% 						erl_syntax:clause(
+	% 							[erl_syntax:atom(true)] ,
+	% 							[],
+	% 							[	
+	% 								build_send_load(ModName),
+	% 								build_receive_load(),
+	% 								T
+	% 							]),
+	% 						erl_syntax:clause(
+	% 							[erl_syntax:atom(false)] ,
+	% 							[],
+	% 							[	
+	% 								T
+	% 							])
+	% 					])
+	% 			]),
+	% 		erl_syntax:clause(
+	% 			[erl_syntax:underscore()] ,
+	% 			[],
+	% 			[	
+	% 				build_send_load(ModName),
+	% 				build_receive_load(),
+	% 				T
+	% 			])
+	% 	]).
 
 inst_fun_clauses(Clauses, _FunId) ->
 	[
@@ -362,16 +366,16 @@ build_send_trace(Tag, Args) ->
 	 		erl_syntax:tuple(Args) 
 	 	] ).
 
-build_send_load(Module) -> 
-	build_send(
-		[
-	 		erl_syntax:atom(load_module),
-	 		Module,
-	 		erl_syntax:application(
-	 			erl_syntax:atom(erlang) , 
-				erl_syntax:atom(self), 
-				[])
-	 	] ).
+% build_send_load(Module) -> 
+% 	build_send(
+% 		[
+% 	 		erl_syntax:atom(load_module),
+% 	 		Module,
+% 	 		erl_syntax:application(
+% 	 			erl_syntax:atom(erlang) , 
+% 				erl_syntax:atom(self), 
+% 				[])
+% 	 	] ).
 
 build_send_lambda(Pid, Msg, Lambda) ->
 	build_send_par(
@@ -382,19 +386,19 @@ build_send_lambda(Pid, Msg, Lambda) ->
 											])
 		]).
 
-build_receive_load() -> 
-	erl_syntax:receive_expr
-	(
-		[
-			erl_syntax:clause
-			(
-				[erl_syntax:atom(loaded)],
-				[],
-				[erl_syntax:atom(ok)
-			 	]
-			)
-		]
-	) .
+% build_receive_load() -> 
+% 	erl_syntax:receive_expr
+% 	(
+% 		[
+% 			erl_syntax:clause
+% 			(
+% 				[erl_syntax:atom(loaded)],
+% 				[],
+% 				[erl_syntax:atom(ok)
+% 			 	]
+% 			)
+% 		]
+% 	) .
 
 build_rec_lambda() ->
 	LambdaVar = free_named_var("Lambda"),
@@ -435,8 +439,8 @@ args_assign(NameRoot, Args) ->
 		 end
 		|| Arg <- Args] ).
 
-lists_with_modules_to_instument() ->	
-	erl_syntax:list(
-		[erl_syntax:atom(M) 
-		|| 
-		M <- get(modules_to_instrument), is_atom(M)]).
+% lists_with_modules_to_instument() ->	
+% 	erl_syntax:list(
+% 		[erl_syntax:atom(M) 
+% 		|| 
+% 		M <- get(modules_to_instrument), is_atom(M)]).
