@@ -9,7 +9,7 @@ trace(InitialCall, PidAnswer, Opts) ->
     NOpts0 =
         case proplists:is_defined(timeout, Opts) of
             true -> Opts;
-            false -> [{timeout, 2000} | Opts]
+            false -> [{timeout, 10000} | Opts]
         end,
     NOpts1 =
         case proplists:is_defined(dir, NOpts0) of
