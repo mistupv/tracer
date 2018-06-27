@@ -52,8 +52,6 @@ trace_1(InitialCall, PidAnswer, Opts) ->
     PidCall = execute_call(InitialCall, self(), Dir, TracingNode),
     logger:append_data(io_lib:fwrite("main_pid ~p~n", [PidCall])),
     RunningProcs = [{PidCall, logger:init_log_file(LogDir, PidCall)}],
-    % io:format("PIDCALL: ~p\n", [PidCall]),
-    TimeoutServer = Timeout,
     InstMod = 
         get(modules_to_instrument),
     PidTrace = 
@@ -67,7 +65,6 @@ trace_1(InitialCall, PidAnswer, Opts) ->
                     [],
                     [ModName],
                     PidMain, 
-                    TimeoutServer, 
                     Dir,
                     LogDir, 
                     TracingNode,
@@ -82,8 +79,10 @@ trace_1(InitialCall, PidAnswer, Opts) ->
             receive
                 {result,Result} ->
                     logger:append_data(io_lib:fwrite("result ~p~n", [Result]))
-            end;
-        idle ->
+            end
+    after
+        Timeout ->
+            PidTrace ! idle,
             logger:append_data(io_lib:fwrite("tracing timeout~n", [])),
             receive
                 {result,Result} ->
@@ -111,7 +110,7 @@ trace_1(InitialCall, PidAnswer, Opts) ->
         end,
     PidAnswer!{Trace}.
 
-receive_loop(Current, Trace, Loaded, PidMain, Timeout, Dir, LogDir, TracingNode, RunningProcs) ->
+receive_loop(Current, Trace, Loaded, PidMain, Dir, LogDir, TracingNode, RunningProcs) ->
     receive 
         TraceItem = {trace, _, _, _} ->
             NTraceItem =
@@ -140,10 +139,16 @@ receive_loop(Current, Trace, Loaded, PidMain, Timeout, Dir, LogDir, TracingNode,
                       LogItem = {SpPid, logger:init_log_file(LogDir, SpPid)},
                       [LogItem | RunningProcs];
                     {trace, proc_done, PidDone, _} ->
-                      LogHandler = proplists:get_value(PidDone, RunningProcs),
-                      logger:append_pid_data(LogHandler, NTrace, PidDone),
-                      logger:stop_log_file(LogHandler),
-                      lists:delete({PidDone, LogHandler}, RunningProcs);
+                      % PidDone could not be found if we timed out
+                      LogHandler = proplists:get_value(PidDone, RunningProcs, not_found),
+                      case LogHandler of
+                        not_found ->
+                            RunningProcs;
+                        _ ->
+                            logger:append_pid_data(LogHandler, NTrace, PidDone),
+                            logger:stop_log_file(LogHandler),
+                            lists:delete({PidDone, LogHandler}, RunningProcs)
+                        end;
                     _ ->
                         RunningProcs
                 end,
@@ -151,12 +156,11 @@ receive_loop(Current, Trace, Loaded, PidMain, Timeout, Dir, LogDir, TracingNode,
                 [] -> PidMain ! all_done;
                 _ -> continue
             end,
-
             % io:format("~p~n", [NRunningProcs]),
             receive_loop(
                 Current + 1, 
                 NTrace,
-                Loaded, PidMain, Timeout, Dir, LogDir, TracingNode, NRunningProcs);
+                Loaded, PidMain, Dir, LogDir, TracingNode, NRunningProcs);
         {load_module, Module, PidAnswer} ->
             % io:format("Load module " ++ atom_to_list(Module) ++ "\n"),
             NLoaded = 
@@ -169,15 +173,8 @@ receive_loop(Current, Trace, Loaded, PidMain, Timeout, Dir, LogDir, TracingNode,
                        PidAnswer!loaded,
                        [Module | Loaded]
                 end, 
-            receive_loop(Current, Trace, NLoaded, PidMain, Timeout, Dir, LogDir, TracingNode, RunningProcs);
-        stop ->
-            PidMain!{trace, Trace},
-            PidMain!{loaded, Loaded};
-        Other -> 
-            io:format("Untracked msg ~p\n", [Other]),
-            receive_loop(Current, Trace, Loaded, PidMain, Timeout, Dir, LogDir, TracingNode, RunningProcs)
-    after 
-        Timeout ->
+            receive_loop(Current, Trace, NLoaded, PidMain, Dir, LogDir, TracingNode, RunningProcs);
+        idle ->
             IdlePids = [Pid || {Pid, _} <- RunningProcs],
             [
              begin
@@ -186,8 +183,14 @@ receive_loop(Current, Trace, Loaded, PidMain, Timeout, Dir, LogDir, TracingNode,
                     logger:append_pid_data(LogHandler, Trace, IdlePid),
                     logger:stop_log_file(LogHandler)
              end || IdlePid <- IdlePids],
-            PidMain!idle,
-            receive_loop(Current, Trace, Loaded, PidMain, Timeout, Dir, LogDir, TracingNode, RunningProcs)
+            NRunningProcs = [],
+            receive_loop(Current, Trace, Loaded, PidMain, Dir, LogDir, TracingNode, NRunningProcs);
+        stop ->
+            PidMain!{trace, Trace},
+            PidMain!{loaded, Loaded};
+        Other -> 
+            io:format("Untracked msg ~p\n", [Other]),
+            receive_loop(Current, Trace, Loaded, PidMain, Dir, LogDir, TracingNode, RunningProcs)
     end.
 
 send_module(TracingNode, Module, Dir) ->
