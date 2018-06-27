@@ -277,7 +277,7 @@ instrument_and_reload_gen(ModName, Dir, CompileOpts, Msg, TracingNode) ->
                 end,
                 EndTime =  erlang:monotonic_time(),
                 DiffTime = erlang:convert_time_unit(EndTime - InitTime, native, microsecond),
-                logger:append_data(io_lib:fwrite("inst ~p ~p~n", [FilePath, DiffTime])),
+                logger:append_data(io_lib:fwrite("comp ~p ~p~n", [FilePath, DiffTime])),
                 % io:format("~p\n", [get_file_path(ModName, Dir)]),
                 % io:format("~p\n", [filename:find_src(ModName)]),
                 % io:format("~p\n", [ file:get_cwd()]),
@@ -308,7 +308,7 @@ instrument_and_reload_sticky(ModName, _UserDir, CompileOpts, Msg, TracingNode) -
         end,
     EndTime =  erlang:monotonic_time(),
     DiffTime = erlang:convert_time_unit(EndTime - InitTime, native, microsecond),
-    logger:append_data(io_lib:fwrite("inst ~p ~p~n", [FilePath, DiffTime])),
+    logger:append_data(io_lib:fwrite("comp ~p ~p~n", [FilePath, DiffTime])),
     % ok = 
     %     code:unstick_dir(BeamDir),
     %% TODO: Tracer gets stuck from here
