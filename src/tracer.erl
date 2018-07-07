@@ -50,7 +50,8 @@ trace_1(InitialCall, PidAnswer, Opts) ->
     instrument_and_reload(ModName, Dir, TracingNode),
     PidMain = self(),
     PidCall = execute_call(InitialCall, self(), Dir, TracingNode),
-    logger:append_data(io_lib:fwrite("main_pid ~p~n", [PidCall])),
+    SPidCall = logger:slpid(PidCall),
+    logger:append_data(io_lib:fwrite("main_pid ~p~n", [SPidCall])),
     RunningProcs = [{PidCall, logger:init_log_file(LogDir, PidCall)}],
     InstMod = 
         get(modules_to_instrument),
@@ -118,11 +119,15 @@ receive_loop(Current, Trace, Loaded, PidMain, Dir, LogDir, TracingNode, RunningP
                     {trace, send_sent, Pid, _} ->
                         Stamp = get_stamp(),
                         Pid ! {stamp, Stamp},
-                        {Pid, send, Stamp};
+                        SPid = logger:slpid(Pid),
+                        {SPid, send, Stamp};
                     {trace, made_spawn, Pid, {SpawnPid}} ->
-                        {Pid, spawn, SpawnPid};
+                        SPid = logger:slpid(Pid),
+                        SSPid = logger:slpid(SpawnPid),
+                        {SPid, spawn, SSPid};
                     {trace,receive_evaluated, Pid, {Stamp}} ->
-                        {Pid, 'receive', Stamp};
+                        SPid = logger:slpid(Pid),
+                        {SPid, 'receive', Stamp};
                     _ -> 
                         TraceItem
                 end,
@@ -152,9 +157,12 @@ receive_loop(Current, Trace, Loaded, PidMain, Dir, LogDir, TracingNode, RunningP
                     _ ->
                         RunningProcs
                 end,
+            io:format("~p~n", [NRunningProcs]),
             case NRunningProcs of
-                [] -> PidMain ! all_done;
-                _ -> continue
+                [] ->
+                    PidMain ! all_done;
+                _ ->
+                    continue
             end,
             % io:format("~p~n", [NRunningProcs]),
             receive_loop(
