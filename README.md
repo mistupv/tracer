@@ -51,9 +51,9 @@ For each line, we have some information regarding the tracing input/outcome:
 
 The remaining files `trace_Pid.log` include the concurrent events caused by process with pid `Pid`. For example, if `trace_<8064.71.0>.log` contains:
 ```
-{<8064.71.0>,spawn,<8064.73.0>}
-{<8064.71.0>,send,0}
-{<8064.71.0>,'receive',1}
+{71,spawn,73}
+{71,send,0}
+{71,'receive',1}
 ```
 It means that process with pid `<8064.71.0>` first spawned another process with pid `<8064.73.0>`, then it sent a message with stamp `0`, and finally it received a message with stamp `1`.
 
