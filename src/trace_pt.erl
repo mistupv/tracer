@@ -244,13 +244,14 @@ inst_send(_T, SendArgs) ->
 
 	SndVarArg = lists:nth(2, VarArgs),
 
+
+	{StampBlock, StampVar} =
+		build_stamp_block(),
+
 	SendSend = 
 		build_send_trace(
 			send_sent,
-			[]),
-
-	{RecStamp, StampVar} =
-		build_rec_stamp(),
+			[StampVar]),
 
 	SendWithStamp =
 		build_send_stamp(
@@ -259,7 +260,7 @@ inst_send(_T, SendArgs) ->
 			StampVar),
  
 	BlockSend = 
-		erl_syntax:block_expr(StoreArgs ++ [SendSend, RecStamp, SendWithStamp, SndVarArg]),
+		erl_syntax:block_expr(StoreArgs ++ [StampBlock, SendWithStamp, SendSend, SndVarArg]),
 	BlockSend.
 
 inst_spawn(T, SpawnArgs) ->
@@ -400,25 +401,30 @@ build_send_stamp(Pid, Msg, Stamp) ->
 % 		]
 % 	) .
 
-build_rec_stamp() ->
+build_stamp_block() ->
 	StampVar = free_named_var("Stamp"),
-	RecExpr =
-		erl_syntax:receive_expr(
-			[
-				erl_syntax:clause(
-					[
-					 erl_syntax:tuple(
-						  [
-						   erl_syntax:atom(stamp),
-						   StampVar
-						  ])
-					],
-					[],
-					[erl_syntax:atom(ok)]
+	MakeRef =
+			erl_syntax:application( 
+				 erl_syntax:atom(make_ref), 
+				 []),
+	StampBlock =
+		erl_syntax:match_expr(StampVar, MakeRef),
+		% erl_syntax:receive_expr(
+		% 	[
+		% 		erl_syntax:clause(
+		% 			[
+		% 			 erl_syntax:tuple(
+		% 				  [
+		% 				   erl_syntax:atom(stamp),
+		% 				   StampVar
+		% 				  ])
+		% 			],
+		% 			[],
+		% 			[erl_syntax:atom(ok)]
 
-				)
-			]),
-	{RecExpr, StampVar}.
+		% 		)
+		% 	]),
+	{StampBlock, StampVar}.
 
 get_free() ->
 	Free = get(free),
