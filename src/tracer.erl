@@ -116,9 +116,9 @@ receive_loop(Current, Trace, Loaded, PidMain, Dir, LogDir, TracingNode, RunningP
         TraceItem = {trace, _, _, _} ->
             NTraceItem =
                 case TraceItem of 
-                    {trace, send_sent, Pid, {Stamp}} ->
-                        % Stamp = get_stamp(),
-                        % Pid ! {stamp, Stamp},
+                    {trace, send_sent, Pid, _} ->
+                        Stamp = get_stamp(),
+                        Pid ! {stamp, Stamp},
                         SPid = logger:slpid(Pid),
                         {SPid, send, Stamp};
                     {trace, made_spawn, Pid, {SpawnPid}} ->
@@ -157,7 +157,7 @@ receive_loop(Current, Trace, Loaded, PidMain, Dir, LogDir, TracingNode, RunningP
                     _ ->
                         RunningProcs
                 end,
-            % io:format("~p~n", [NRunningProcs]),
+            io:format("~p~n", [NRunningProcs]),
             case NRunningProcs of
                 [] ->
                     PidMain ! all_done;
