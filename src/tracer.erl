@@ -157,14 +157,12 @@ receive_loop(Current, Trace, Loaded, PidMain, Dir, LogDir, TracingNode, RunningP
                     _ ->
                         RunningProcs
                 end,
-            io:format("~p~n", [NRunningProcs]),
             case NRunningProcs of
                 [] ->
                     PidMain ! all_done;
                 _ ->
                     continue
             end,
-            % io:format("~p~n", [NRunningProcs]),
             receive_loop(
                 Current + 1, 
                 NTrace,
