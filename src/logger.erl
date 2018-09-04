@@ -14,31 +14,31 @@ init_log_dir(Dir) ->
       error
   end.
 
-init_log_file(Dir, Pid) ->
-  FileName = get_filename(Dir, Pid),
-  case file:open(FileName, write) of
-    {ok, FileHandler} ->
-      FileHandler;
-    {error, R} ->
-      io:format("Error: Couldn't init log file for pid ~p (reason ~p).~n", [Pid, R]),
-      error
-  end.
+init_log_file(Dir, Pid) -> ok.
+  % FileName = get_filename(Dir, Pid),
+  % case file:open(FileName, write) of
+  %   {ok, FileHandler} ->
+  %     FileHandler;
+  %   {error, R} ->
+  %     io:format("Error: Couldn't init log file for pid ~p (reason ~p).~n", [Pid, R]),
+  %     error
+  % end.
 
 append_data(Data) ->
   LogHandler = get(log_handler),
   file:write(LogHandler, Data).
 
-append_pid_data(FileHandler, Items, Pid) ->
-  SPid = slpid(Pid),
-  PidItems = [ Item || {P, _, _} = Item <- Items, P == SPid ],
-  RPidItems = lists:reverse(PidItems),
-  append_items(FileHandler, RPidItems).
+append_pid_data(FileHandler, Items, Pid) -> ok.
+  % SPid = slpid(Pid),
+  % PidItems = [ Item || {P, _, _} = Item <- Items, P == SPid ],
+  % RPidItems = lists:reverse(PidItems),
+  % append_items(FileHandler, RPidItems).
 
-append_items(FileHandler, Items) ->
-  [file:write(FileHandler, io_lib:fwrite("~p~n", [Item])) || Item <- Items].
+append_items(FileHandler, Items) -> ok.
+  % [file:write(FileHandler, io_lib:fwrite("~p~n", [Item])) || Item <- Items].
 
-stop_log_file(FileHandler) ->
-  file:close(FileHandler).
+stop_log_file(FileHandler) -> ok.
+  % file:close(FileHandler).
 
 get_filename(Dir, Pid) ->
   PidStr = pid_to_spid(pid_to_list(Pid)),
