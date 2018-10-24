@@ -106,7 +106,7 @@ inst_expr(T) ->
 								spawn_monitor ->
 									inst_spawn(T, erl_syntax:application_arguments(T));
 								spawn_opt ->
-									inst_spawn(T, erl_syntax:application_arguments(T));
+									inst_spawn_opt(T, erl_syntax:application_arguments(T));
 								apply ->
 									[ModName, _, _] = 
 										erl_syntax:application_arguments(T),
@@ -130,7 +130,7 @@ inst_expr(T) ->
 									{erlang, spawn_monitor} ->
 										inst_spawn(T, erl_syntax:application_arguments(T));
 									{erlang, spawn_opt} ->
-										inst_spawn(T, erl_syntax:application_arguments(T));
+										inst_spawn_opt(T, erl_syntax:application_arguments(T));
 									_ ->
 										inst_call_loading(T, ModName)
 								end
