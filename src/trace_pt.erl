@@ -321,6 +321,31 @@ inst_spawn_3(T, SpawnArgs) ->
 		erl_syntax:block_expr(StoreArgs ++ [NT, SendSpawn, VarReceiveResult]),
 	BlockSpawn.
 
+inst_spawn_opt(T, [Fun, Opts]) ->
+	NFunClauses =
+		inst_fun_clauses0(erl_syntax:fun_expr_clauses(Fun)),
+
+	NSpawnArgs = [erl_syntax:fun_expr(NFunClauses), Opts],
+
+	{VarArgs, StoreArgs} =
+		args_assign("SpawnArg", NSpawnArgs),
+
+	VarReceiveResult =
+		free_named_var("TRCSpawnResult"),
+
+	SendSpawn =
+		build_send_trace(made_spawn, [VarReceiveResult]),
+
+	SpawnCall =
+		erl_syntax:application(erl_syntax:application_operator(T), VarArgs),
+
+	NT =
+		erl_syntax:match_expr(VarReceiveResult, SpawnCall),
+
+	BlockSpawn =
+		erl_syntax:block_expr(StoreArgs ++ [NT, SendSpawn, VarReceiveResult]),
+	BlockSpawn.
+
 inst_receive_clause(Clause, InstInfo) ->
 	{CurrentClause, StampVar} = InstInfo,
 	{ [_VarMsg], Patterns} = 
