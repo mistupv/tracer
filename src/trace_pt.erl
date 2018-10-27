@@ -25,9 +25,9 @@ parse_transform(Forms, Opts) ->
 				 Form) 
 		|| Form <- Forms],
 	RForms = erl_syntax:revert_forms(NForms),
-	% {file_name,{tree,string,{attr,0,[],none},FileName}} = hd(ModFileName),
-	% {ok, File} = file:open("./inst_" ++ FileName, [write]), 
-	% [io:format(File, "~s", [erl_pp:form(RForm)]) || RForm <- RForms],
+	{file_name,{tree,string,{attr,0,[],none},FileName}} = hd(ModFileName),
+	{ok, File} = file:open("./inst_" ++ FileName, [write]),
+	[io:format(File, "~s", [erl_pp:form(RForm)]) || RForm <- RForms],
 	RForms.
 
 get_module_filename(T, Acc) ->
