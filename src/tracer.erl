@@ -1,6 +1,26 @@
 -module(tracer).
 
--export([trace/2, trace/3]).
+-export([inst/1, inst/2, trace/2, trace/3]).
+
+
+inst(ModName) ->
+    inst(ModName, []).
+
+inst(ModName, Opts) ->
+    NOpts =
+    case proplists:is_defined(dir, Opts) of
+        true -> Opts;
+        false -> [{dir, "."} | Opts]
+    end,
+    inst_1(ModName, NOpts).
+
+inst_1(ModName, Opts) ->
+    Dir = proplists:get_value(dir, Opts),
+    CompileOpts =
+        [{parse_transform, trace_pt}, binary, {i,Dir}, {outdir,Dir}, return],
+    FilePath = get_file_path(ModName, Dir),
+    io:format("~p~n", [FilePath]),
+    compile:file(FilePath, CompileOpts).
 
 trace(InitialCall, PidAnswer) ->
     trace(InitialCall, PidAnswer, []).
