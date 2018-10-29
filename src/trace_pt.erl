@@ -293,10 +293,10 @@ build_send_par(Dest, Pars) ->
 
 build_send(Msg) ->
 	build_send_par(
-		erl_syntax:tuple([
+		% erl_syntax:tuple([
 			erl_syntax:atom(tracer),
-			erl_syntax:atom(node())
-		]),
+		% 	erl_syntax:atom(node())
+		% ]),
 		[erl_syntax:tuple(Msg)]).
 
 build_send_trace(Tag, Args) -> 
