@@ -4,7 +4,7 @@
 
 % TODO: Treat correctly errors to be considered as a value
 parse_transform(Forms, Opts) ->
-	put(modules_to_instrument, hd([InsMod0 || {inst_mod, InsMod0} <- Opts])),
+	% put(modules_to_instrument, hd([InsMod0 || {inst_mod, InsMod0} <- Opts])),
 	put(cur_dir, hd([Dir0 || {i, Dir0} <- Opts])),
 	put(free, 0),
 	ModFileName = 
