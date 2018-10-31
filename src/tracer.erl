@@ -50,11 +50,11 @@ trace(InitialCall, PidAnswer, Opts) ->
 
 trace_1(InitialCall, PidAnswer, Opts) ->
     ModName = get_mod_name(InitialCall),
-    {ok, TracingNode} = 
-        slave:start(
-            list_to_atom(net_adm:localhost()), 
-            tracing, 
-            "-setcookie cookie"),
+    % {ok, TracingNode} = 
+    %     slave:start(
+    %         list_to_atom(net_adm:localhost()), 
+    %         tracing, 
+    %         "-setcookie cookie"),
     Timeout = proplists:get_value(timeout, Opts),
     Dir     = proplists:get_value(dir,     Opts),
     Mods    = proplists:get_value(mods,    Opts),
@@ -88,8 +88,8 @@ trace_1(InitialCall, PidAnswer, Opts) ->
                     PidMain, 
                     Dir,
                     LogDir, 
-                    TracingNode,
-                    RunningProcs)
+                    % TracingNode,
+                    self())
             end),
     register(tracer, PidTrace),
     PidCall!start,
