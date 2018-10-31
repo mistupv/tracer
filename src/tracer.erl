@@ -67,9 +67,9 @@ trace_1(InitialCall, PidAnswer, Opts) ->
     % io:format("~p\n~p\n", [ModName, Dir]),
     % OriginalLibCode = 
     %     [code:get_object_code(Mod) || Mod <- [gen_server, supervisor, gen_fsm, proc_lib, gen]],
-    instrument_and_reload(ModName, Dir, TracingNode),
+    % instrument_and_reload(ModName, Dir, TracingNode),
     PidMain = self(),
-    PidCall = execute_call(InitialCall, self(), Dir, TracingNode),
+    PidCall = execute_call(InitialCall, PidMain),
     SPidCall = logger:slpid(PidCall),
     logger:append_data(io_lib:fwrite("main_pid ~p~n", [SPidCall])),
     RunningProcs = [{PidCall, logger:init_log_file(LogDir, PidCall)}],
@@ -95,12 +95,12 @@ trace_1(InitialCall, PidAnswer, Opts) ->
     PidCall!start,
     InitTime = erlang:monotonic_time(),
     receive 
-        all_done ->
-            logger:append_data(io_lib:fwrite("tracing success~n", [])),
-            receive
+        % all_done ->
+        %     logger:append_data(io_lib:fwrite("tracing success~n", [])),
+        %     receive
                 {result,Result} ->
                     logger:append_data(io_lib:fwrite("result ~p~n", [Result]))
-            end
+            % end
     after
         Timeout ->
             PidTrace ! idle,
@@ -118,7 +118,7 @@ trace_1(InitialCall, PidAnswer, Opts) ->
     logger:append_data(io_lib:fwrite("exec ~p~n", [DiffTime])),
     unregister(tracer),
     PidTrace!stop,
-    slave:stop(TracingNode),
+    % slave:stop(TracingNode),
     Trace = 
         receive 
             {trace,Trace0} ->
@@ -232,17 +232,15 @@ send_module(TracingNode, Module, Dir) ->
     ok.
 
 
-execute_call(Call, PidParent, _Dir, TracingNode) ->
-    send_module(TracingNode, ?MODULE, filename:absname(filename:dirname(code:which(?MODULE)) ++ "/..") ++ "/src"),
-    send_module(TracingNode, smerl, filename:absname(filename:dirname(code:which(?MODULE)) ++ "/..") ++ "/src"),
-    MainNodeStr = atom_to_list(node()),
+execute_call(Call, PidParent) ->
+    % send_module(TracingNode, ?MODULE, filename:absname(filename:dirname(code:which(?MODULE)) ++ "/..") ++ "/src"),
+    % send_module(TracingNode, smerl, filename:absname(filename:dirname(code:which(?MODULE)) ++ "/..") ++ "/src"),
+    % MainNodeStr = atom_to_list(node()),
     FUN = 
         fun() -> 
             M1 = smerl:new(foo),
             {ok, M2} = 
-                smerl:add_func(M1, "bar() -> try MainRes = " ++ Call ++
-                                   ", {tracer, '" ++ MainNodeStr ++ "'} ! {trace, proc_done, self(), {}}," ++
-                                   "MainRes catch E1:E2 -> {E1,E2} end."),
+                smerl:add_func(M1, "bar() -> try " ++ Call ++ " catch E1:E2 -> {E1,E2} end."),
             smerl:compile(M2,[nowarn_format]),
             receive 
                 start -> ok 
@@ -250,7 +248,7 @@ execute_call(Call, PidParent, _Dir, TracingNode) ->
             Res = foo:bar(), 
             PidParent!{result,Res}
         end,
-    spawn(TracingNode, FUN).
+    spawn(FUN).
 
 get_mod_name(InitialCall) ->
     AExpr = 
