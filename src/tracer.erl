@@ -1,6 +1,6 @@
 -module(tracer).
 
--export([inst/1, inst/2, trace/2, trace/3]).
+-export([inst/1, inst/2, trace/0, stop/0, trace/2]).
 
 
 inst(ModName) ->
@@ -22,116 +22,129 @@ inst_1(ModName, Opts) ->
     io:format("~p~n", [FilePath]),
     compile:file(FilePath, CompileOpts).
 
-trace(InitialCall, PidAnswer) ->
-    trace(InitialCall, PidAnswer, []).
+trace(InitialCall, PidAnswer) -> ok.
+    % trace(InitialCall, PidAnswer, []).
 
-trace(InitialCall, PidAnswer, Opts) ->
-    NOpts0 =
-        case proplists:is_defined(timeout, Opts) of
-            true -> Opts;
-            false -> [{timeout, 10000} | Opts]
-        end,
-    NOpts1 =
-        case proplists:is_defined(dir, NOpts0) of
-            true -> NOpts0;
-            false -> [{dir, "."} | NOpts0]
-        end,
-    NOpts2 =
-        case proplists:is_defined(mods, NOpts1) of
-            true -> NOpts1;
-            false -> [{mods, []} | NOpts1]
-        end,
-    NOpts3 =
-        case proplists:is_defined(log_dir, NOpts2) of
-            true -> NOpts2;
-            false -> [{log_dir, "trace"} | NOpts2]
-        end,
-    trace_1(InitialCall, PidAnswer, NOpts3).
+trace() ->
+    % NOpts0 =
+    %     case proplists:is_defined(timeout, Opts) of
+    %         true -> Opts;
+    %         false -> [{timeout, 10000} | Opts]
+    %     end,
+    % NOpts1 =
+    %     case proplists:is_defined(dir, NOpts0) of
+    %         true -> NOpts0;
+    %         false -> [{dir, "."} | NOpts0]
+    %     end,
+    % NOpts2 =
+    %     case proplists:is_defined(mods, NOpts1) of
+    %         true -> NOpts1;
+    %         false -> [{mods, []} | NOpts1]
+    %     end,
+    % NOpts3 =
+    %     case proplists:is_defined(log_dir, NOpts2) of
+    %         true -> NOpts2;
+    %         false -> [{log_dir, "trace"} | NOpts2]
+    %     end,
+    % trace_1(InitialCall, PidAnswer, NOpts3).
 
-trace_1(InitialCall, PidAnswer, Opts) ->
-    ModName = get_mod_name(InitialCall),
+% trace_1(InitialCall, PidAnswer, Opts) ->
+    % ModName = get_mod_name(InitialCall),
     % {ok, TracingNode} = 
     %     slave:start(
     %         list_to_atom(net_adm:localhost()), 
     %         tracing, 
     %         "-setcookie cookie"),
-    Timeout = proplists:get_value(timeout, Opts),
-    Dir     = proplists:get_value(dir,     Opts),
-    Mods    = proplists:get_value(mods,    Opts),
-    LogDir  = proplists:get_value(log_dir, Opts),
-    put(modules_to_instrument, Mods),
-    LogHandler = logger:init_log_dir(LogDir),
-    put(log_handler, LogHandler),
-    logger:append_data(io_lib:fwrite("call ~p~n", [InitialCall])),
+    % Timeout = proplists:get_value(timeout, Opts),
+    % Dir     = proplists:get_value(dir,     Opts),
+    % Mods    = proplists:get_value(mods,    Opts),
+    % LogDir  = proplists:get_value(log_dir, Opts),
+    % put(modules_to_instrument, Mods),
+    % LogHandler = logger:init_log_dir(LogDir),
+    % put(log_handler, LogHandler),
+    % logger:append_data(io_lib:fwrite("call ~p~n", [InitialCall])),
     % io:format("~p\n", [SO]),
     % io:format("~p\n~p\n", [ModName, Dir]),
     % OriginalLibCode = 
     %     [code:get_object_code(Mod) || Mod <- [gen_server, supervisor, gen_fsm, proc_lib, gen]],
     % instrument_and_reload(ModName, Dir, TracingNode),
-    PidMain = self(),
-    PidCall = execute_call(InitialCall, PidMain),
-    SPidCall = logger:slpid(PidCall),
-    logger:append_data(io_lib:fwrite("main_pid ~p~n", [SPidCall])),
+    % PidMain = self(),
+    % PidCall = execute_call(InitialCall, PidMain),
+    % SPidCall = logger:slpid(PidCall),
+    % logger:append_data(io_lib:fwrite("main_pid ~p~n", [SPidCall])),
     % RunningProcs = [{PidCall, logger:init_log_file(LogDir, PidCall)}],
-    InstMod = 
-        get(modules_to_instrument),
+    % InstMod = 
+    %     get(modules_to_instrument),
     PidTrace = 
         spawn(
             fun() ->
-                put(modules_to_instrument, InstMod),
+                % put(modules_to_instrument, InstMod),
                 put(stamp, 0),
-                put(log_handler, LogHandler),
+                % put(log_handler, LogHandler),
                 receive_loop(
-                    0, 
+                    0,
                     [],
-                    [ModName],
-                    PidMain, 
-                    Dir,
-                    LogDir, 
-                    % TracingNode,
                     self())
+                    % [],
+                    % [ModName],
+                    % PidMain, 
+                    % Dir,
+                    % LogDir, 
+                    % % TracingNode,
+                    % self())
             end),
-    register(tracer, PidTrace),
-    PidCall!start,
-    InitTime = erlang:monotonic_time(),
-    receive 
-        % all_done ->
-        %     logger:append_data(io_lib:fwrite("tracing success~n", [])),
-        %     receive
-                {result,Result} ->
-                    logger:append_data(io_lib:fwrite("result ~p~n", [Result]))
-            % end
-    after
-        Timeout ->
-            PidTrace ! idle,
-            logger:append_data(io_lib:fwrite("tracing timeout~n", [])),
-            receive
-                {result,Result} ->
-                    logger:append_data(io_lib:fwrite("result ~p~n", [Result]))
-                after
-                    0 ->
-                        logger:append_data(io_lib:fwrite("result none~n", []))
-            end
-    end,
-    EndTime =  erlang:monotonic_time(),
-    DiffTime = erlang:convert_time_unit(EndTime - InitTime, native, microsecond),
-    logger:append_data(io_lib:fwrite("exec ~p~n", [DiffTime])),
-    unregister(tracer),
-    PidTrace!stop,
+    register(tracer, PidTrace).
+    % PidCall!start,
+    % InitTime = erlang:monotonic_time(),
+    % receive 
+    %     % all_done ->
+    %     %     logger:append_data(io_lib:fwrite("tracing success~n", [])),
+    %     %     receive
+    %             {result,Result} ->
+    %                 logger:append_data(io_lib:fwrite("result ~p~n", [Result]))
+    %         % end
+    % after
+    %     Timeout ->
+    %         PidTrace ! idle,
+    %         logger:append_data(io_lib:fwrite("tracing timeout~n", [])),
+    %         receive
+    %             {result,Result} ->
+    %                 logger:append_data(io_lib:fwrite("result ~p~n", [Result]))
+    %             after
+    %                 0 ->
+    %                     logger:append_data(io_lib:fwrite("result none~n", []))
+    %         end
+    % end,
+    % EndTime =  erlang:monotonic_time(),
+    % DiffTime = erlang:convert_time_unit(EndTime - InitTime, native, microsecond),
+    % logger:append_data(io_lib:fwrite("exec ~p~n", [DiffTime])),
+    % receive
+    %     ok -> ok
+    % after
+    %     10000 -> ok
+    % end,
+    % unregister(tracer),
+    % PidTrace!stop,
     % slave:stop(TracingNode),
-    Trace = 
-        receive 
-            {trace,Trace0} ->
-                lists:reverse(Trace0)
-        end,
+    % Trace = 
+    %     receive 
+    %         {trace,Trace0} ->
+    %             lists:reverse(Trace0)
+    %     end,
+    % Trace.
     % Loaded = % Commented to avoid warning
         % receive 
         %     {loaded,Loaded0} ->
         %         Loaded0
         % end,
-    PidAnswer!{Trace}.
+    % PidAnswer!{Trace}.
 
-receive_loop(Current, Trace, Loaded, PidMain, Dir, LogDir, TracingNode) ->
+stop() ->
+    tracer ! stop,
+    unregister(tracer).
+
+% receive_loop(Current, Trace, Loaded, PidMain, Dir, LogDir, TracingNode) ->
+receive_loop(Current, Trace, PidMain) ->
     receive 
         TraceItem = {trace, _, _, _} ->
             NTraceItem =
@@ -173,9 +186,11 @@ receive_loop(Current, Trace, Loaded, PidMain, Dir, LogDir, TracingNode) ->
             %             RunningProcs
             %     end,
             receive_loop(
-                Current + 1, 
+                Current + 1,
                 NTrace,
-                Loaded, PidMain, Dir, LogDir, TracingNode);
+                PidMain);
+                % NTrace,
+                % Loaded, PidMain, Dir, LogDir, TracingNode);
         % {load_module, Module, PidAnswer} ->
         %     % io:format("Load module " ++ atom_to_list(Module) ++ "\n"),
         %     NLoaded = 
@@ -201,11 +216,13 @@ receive_loop(Current, Trace, Loaded, PidMain, Dir, LogDir, TracingNode) ->
         %     NRunningProcs = [],
         %     receive_loop(Current, Trace, Loaded, PidMain, Dir, LogDir, TracingNode);
         stop ->
-            PidMain!{trace, Trace};
+            ok;
+            % PidMain!{trace, Trace};
             % PidMain!{loaded, Loaded};
         Other -> 
             io:format("Untracked msg ~p\n", [Other]),
-            receive_loop(Current, Trace, Loaded, PidMain, Dir, LogDir, TracingNode)
+            % receive_loop(Current, Trace, Loaded, PidMain, Dir, LogDir, TracingNode)
+            receive_loop(Current, Trace, PidMain)
     end.
 
 send_module(TracingNode, Module, Dir) ->
