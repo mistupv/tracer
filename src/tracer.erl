@@ -165,7 +165,7 @@ receive_loop(Current, Trace, PidMain) ->
                         TraceItem
                 end,
         NTrace = [NTraceItem|Trace],
-        io:format("~p~n", [NTraceItem]),
+        % io:format("~p~n", [NTraceItem]),
             % NRunningProcs =
             %     case TraceItem of
             %         {trace, made_spawn, _, {SpPid}} ->
