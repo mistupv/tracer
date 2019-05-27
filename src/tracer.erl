@@ -68,24 +68,28 @@ trace_1(InitialCall, Opts) ->
             end),
     register(tracer, PidTrace),
     PidCall!start,
+    receive
+	impossible -> none
+     after
+          Timeout ->
                 receive
                   {result,Result} ->
                       logger:append_data(io_lib:fwrite("result ~p~n", [Result]))
-
-     after
-          Timeout ->
-              PidTrace ! idle,
-              logger:append_data(io_lib:fwrite("tracing timeout~n", [])),
-              receive
-                  {result,Result} ->
-                      logger:append_data(io_lib:fwrite("result ~p~n", [Result]))
-                  after
-                      0 ->
-                          logger:append_data(io_lib:fwrite("result none~n", []))
-              end
-     end,
+		 after 0 -> logger:append_data(io_lib:fwrite("result none~n", []))
+		 end,
+              %PidTrace ! idle,
+              %logger:append_data(io_lib:fwrite("tracing timeout~n", [])),
+              %receive
+              %    {result,Result} ->
+              %        logger:append_data(io_lib:fwrite("result ~p~n", [Result]))
+               %   after
+               %       0 ->
+              
+              %end
+     %end,
     
-    PidTrace!stop.
+    PidTrace!stop
+     end.
 
 stop() ->
     tracer ! stop,
@@ -134,7 +138,8 @@ receive_loop(Current, Trace, PidMain, RunningProcs, LogDir) ->
                 PidMain,
 	      NRunningProcs,LogDir);
         stop ->
-            PidMain!{trace, Trace};
+            PidMain!{trace, Trace},
+	    init:stop();
         Other -> 
             io:format("Untracked msg ~p\n", [Other]),
             receive_loop(Current, Trace, PidMain, RunningProcs, LogDir) %RunningProcs should be NRunningProcs
@@ -145,8 +150,8 @@ execute_call(Call, PidParent) ->
         fun() -> 
             M1 = smerl:new(foo),
             {ok, M2} = 
-                %smerl:add_func(M1, "bar() -> try " ++ Call ++ ". catch E1:E2 -> {E1,E2} end."),
-		smerl:add_func(M1, "bar() ->" ++ Call ++ "."), 
+                smerl:add_func(M1, "bar() -> try " ++ Call ++ " catch E1:E2 -> none end."),
+		%smerl:add_func(M1, "bar() ->" ++ Call ++ "."), 
             smerl:compile(M2,[nowarn_format]),
             receive 
                 start -> ok 
