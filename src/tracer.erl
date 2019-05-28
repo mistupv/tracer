@@ -68,14 +68,16 @@ trace_1(InitialCall, Opts) ->
             end),
     register(tracer, PidTrace),
     PidCall!start,
-    receive
-	impossible -> none
-     after
-          Timeout ->
+    io:format("Please don't close the shell before the end of tracing~n"),
+    timer:sleep(Timeout),
+    %receive
+%	impossible -> none
+ %    after
+  %        Timeout ->
                 receive
-                  {result,Result} ->
+                  {result,Result} -> 
                       logger:append_data(io_lib:fwrite("result ~p~n", [Result]))
-		 after 0 -> logger:append_data(io_lib:fwrite("result none~n", []))
+		 after 0 -> io:format("1"),logger:append_data(io_lib:fwrite("result none~n", []))
 		 end,
               %PidTrace ! idle,
               %logger:append_data(io_lib:fwrite("tracing timeout~n", [])),
@@ -87,9 +89,9 @@ trace_1(InitialCall, Opts) ->
               
               %end
      %end,
-    
-    PidTrace!stop
-     end.
+    io:format("End of tracing~n"),
+	     PidTrace!stop.
+   %  end.
 
 stop() ->
     tracer ! stop,
@@ -138,8 +140,7 @@ receive_loop(Current, Trace, PidMain, RunningProcs, LogDir) ->
                 PidMain,
 	      NRunningProcs,LogDir);
         stop ->
-            PidMain!{trace, Trace},
-	    init:stop();
+            PidMain!{trace, Trace};
         Other -> 
             io:format("Untracked msg ~p\n", [Other]),
             receive_loop(Current, Trace, PidMain, RunningProcs, LogDir) %RunningProcs should be NRunningProcs
@@ -150,7 +151,7 @@ execute_call(Call, PidParent) ->
         fun() -> 
             M1 = smerl:new(foo),
             {ok, M2} = 
-                smerl:add_func(M1, "bar() -> try " ++ Call ++ " catch E1:E2 -> none end."),
+                smerl:add_func(M1, "bar() -> try " ++ Call ++ " catch E1 -> none end."),
 		%smerl:add_func(M1, "bar() ->" ++ Call ++ "."), 
             smerl:compile(M2,[nowarn_format]),
             receive 
