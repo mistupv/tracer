@@ -20,13 +20,13 @@ asynchAnd(N,Out) ->
     end.
 
 checkCredit(Price,Pid) -> if 
-			      Price < 10 -> Pid!true;
-			      true -> Pid!false
+			      Price < 10 -> io:format("Credit check successful~n"),Pid!true;
+			      true -> io:format("Credit check failed~n"),Pid!false
 			  end.
 					    
-checkAddress(Pid) -> Pid!true.
+checkAddress(Pid) -> io:format("Address check successful~n"),Pid!true.
 
-checkItem(Pid) -> Pid!true.				   
+checkItem(Pid) -> io:format("Item check successful~n"),Pid!true.				   
      
      
      
