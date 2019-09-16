@@ -1,4 +1,4 @@
--module(logger).
+-module(log).
 
 -export([init_log_dir/1, init_log_file/2, stop_log_file/1,
          append_data/1, append_pid_data/3, slpid/1]).

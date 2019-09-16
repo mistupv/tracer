@@ -40,9 +40,9 @@ trace_1(InitialCall, PidAnswer, Opts) ->
     Mods    = proplists:get_value(mods,    Opts),
     LogDir  = proplists:get_value(log_dir, Opts),
     put(modules_to_instrument, Mods),
-    LogHandler = logger:init_log_dir(LogDir),
+    LogHandler = log:init_log_dir(LogDir),
     put(log_handler, LogHandler),
-    logger:append_data(io_lib:fwrite("call ~p~n", [InitialCall])),
+    log:append_data(io_lib:fwrite("call ~p~n", [InitialCall])),
     % io:format("~p\n", [SO]),
     % io:format("~p\n~p\n", [ModName, Dir]),
     % OriginalLibCode = 
@@ -50,9 +50,9 @@ trace_1(InitialCall, PidAnswer, Opts) ->
     instrument_and_reload(ModName, Dir, TracingNode),
     PidMain = self(),
     PidCall = execute_call(InitialCall, self(), Dir, TracingNode),
-    SPidCall = logger:slpid(PidCall),
-    logger:append_data(io_lib:fwrite("main_pid ~p~n", [SPidCall])),
-    RunningProcs = [{PidCall, logger:init_log_file(LogDir, PidCall)}],
+    SPidCall = log:slpid(PidCall),
+    log:append_data(io_lib:fwrite("main_pid ~p~n", [SPidCall])),
+    RunningProcs = [{PidCall, log:init_log_file(LogDir, PidCall)}],
     InstMod = 
         get(modules_to_instrument),
     PidTrace = 
@@ -76,26 +76,26 @@ trace_1(InitialCall, PidAnswer, Opts) ->
     InitTime = erlang:monotonic_time(),
     receive 
         all_done ->
-            logger:append_data(io_lib:fwrite("tracing success~n", [])),
+            log:append_data(io_lib:fwrite("tracing success~n", [])),
             receive
                 {result,Result} ->
-                    logger:append_data(io_lib:fwrite("result ~p~n", [Result]))
+                    log:append_data(io_lib:fwrite("result ~p~n", [Result]))
             end
     after
         Timeout ->
             PidTrace ! idle,
-            logger:append_data(io_lib:fwrite("tracing timeout~n", [])),
+            log:append_data(io_lib:fwrite("tracing timeout~n", [])),
             receive
                 {result,Result} ->
-                    logger:append_data(io_lib:fwrite("result ~p~n", [Result]))
+                    log:append_data(io_lib:fwrite("result ~p~n", [Result]))
                 after
                     0 ->
-                        logger:append_data(io_lib:fwrite("result none~n", []))
+                        log:append_data(io_lib:fwrite("result none~n", []))
             end
     end,
     EndTime =  erlang:monotonic_time(),
     DiffTime = erlang:convert_time_unit(EndTime - InitTime, native, microsecond),
-    logger:append_data(io_lib:fwrite("exec ~p~n", [DiffTime])),
+    log:append_data(io_lib:fwrite("exec ~p~n", [DiffTime])),
     unregister(tracer),
     PidTrace!stop,
     slave:stop(TracingNode),
@@ -119,14 +119,14 @@ receive_loop(Current, Trace, Loaded, PidMain, Dir, LogDir, TracingNode, RunningP
                     {trace, send_sent, Pid, _} ->
                         Stamp = get_stamp(),
                         Pid ! {stamp, Stamp},
-                        SPid = logger:slpid(Pid),
+                        SPid = log:slpid(Pid),
                         {SPid, send, Stamp};
                     {trace, made_spawn, Pid, {SpawnPid}} ->
-                        SPid = logger:slpid(Pid),
-                        SSPid = logger:slpid(SpawnPid),
+                        SPid = log:slpid(Pid),
+                        SSPid = log:slpid(SpawnPid),
                         {SPid, spawn, SSPid};
                     {trace,receive_evaluated, Pid, {Stamp}} ->
-                        SPid = logger:slpid(Pid),
+                        SPid = log:slpid(Pid),
                         {SPid, 'receive', Stamp};
                     _ -> 
                         TraceItem
@@ -141,7 +141,7 @@ receive_loop(Current, Trace, Loaded, PidMain, Dir, LogDir, TracingNode, RunningP
             NRunningProcs =
                 case TraceItem of
                     {trace, made_spawn, _, {SpPid}} ->
-                      LogItem = {SpPid, logger:init_log_file(LogDir, SpPid)},
+                      LogItem = {SpPid, log:init_log_file(LogDir, SpPid)},
                       [LogItem | RunningProcs];
                     {trace, proc_done, PidDone, _} ->
                       % PidDone could not be found if we timed out
@@ -150,8 +150,8 @@ receive_loop(Current, Trace, Loaded, PidMain, Dir, LogDir, TracingNode, RunningP
                         not_found ->
                             RunningProcs;
                         _ ->
-                            logger:append_pid_data(LogHandler, NTrace, PidDone),
-                            logger:stop_log_file(LogHandler),
+                            log:append_pid_data(LogHandler, NTrace, PidDone),
+                            log:stop_log_file(LogHandler),
                             lists:delete({PidDone, LogHandler}, RunningProcs)
                         end;
                     _ ->
@@ -186,8 +186,8 @@ receive_loop(Current, Trace, Loaded, PidMain, Dir, LogDir, TracingNode, RunningP
              begin
                 LogHandler =
                     proplists:get_value(IdlePid, RunningProcs),
-                    logger:append_pid_data(LogHandler, Trace, IdlePid),
-                    logger:stop_log_file(LogHandler)
+                    log:append_pid_data(LogHandler, Trace, IdlePid),
+                    log:stop_log_file(LogHandler)
              end || IdlePid <- IdlePids],
             NRunningProcs = [],
             receive_loop(Current, Trace, Loaded, PidMain, Dir, LogDir, TracingNode, NRunningProcs);
@@ -283,7 +283,7 @@ instrument_and_reload_gen(ModName, Dir, CompileOpts, Msg, TracingNode) ->
                 end,
                 EndTime =  erlang:monotonic_time(),
                 DiffTime = erlang:convert_time_unit(EndTime - InitTime, native, microsecond),
-                logger:append_data(io_lib:fwrite("comp ~p ~p~n", [FilePath, DiffTime])),
+                log:append_data(io_lib:fwrite("comp ~p ~p~n", [FilePath, DiffTime])),
                 % io:format("~p\n", [get_file_path(ModName, Dir)]),
                 % io:format("~p\n", [filename:find_src(ModName)]),
                 % io:format("~p\n", [ file:get_cwd()]),
@@ -314,7 +314,7 @@ instrument_and_reload_sticky(ModName, _UserDir, CompileOpts, Msg, TracingNode) -
         end,
     EndTime =  erlang:monotonic_time(),
     DiffTime = erlang:convert_time_unit(EndTime - InitTime, native, microsecond),
-    logger:append_data(io_lib:fwrite("comp ~p ~p~n", [FilePath, DiffTime])),
+    log:append_data(io_lib:fwrite("comp ~p ~p~n", [FilePath, DiffTime])),
     % ok = 
     %     code:unstick_dir(BeamDir),
     %% TODO: Tracer gets stuck from here

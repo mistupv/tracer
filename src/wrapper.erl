@@ -27,26 +27,26 @@ trace_1(InitialCall, PidAnswer, Opts) ->
             "-setcookie cookie"),
     Dir     = proplists:get_value(dir,     Opts),
     LogDir  = proplists:get_value(log_dir, Opts),
-    LogHandler = logger:init_log_dir(LogDir),
+    LogHandler = log:init_log_dir(LogDir),
     put(log_handler, LogHandler),
-    logger:append_data(io_lib:fwrite("call ~p~n", [InitialCall])),
+    log:append_data(io_lib:fwrite("call ~p~n", [InitialCall])),
     % io:format("~p\n", [SO]),
     % io:format("~p\n~p\n", [ModName, Dir]),
     % OriginalLibCode = 
     %     [code:get_object_code(Mod) || Mod <- [gen_server, supervisor, gen_fsm, proc_lib, gen]],
     instrument_and_reload(ModName, Dir, TracingNode),
     PidCall = execute_call(InitialCall, self(), Dir, TracingNode),
-    logger:append_data(io_lib:fwrite("main_pid ~p~n", [PidCall])),
+    log:append_data(io_lib:fwrite("main_pid ~p~n", [PidCall])),
     PidCall!start,
     InitTime = erlang:monotonic_time(),
     receive 
         {result,Result} ->
-        logger:append_data(io_lib:fwrite("result ~p~n", [Result]))
+        log:append_data(io_lib:fwrite("result ~p~n", [Result]))
 
     end,
     EndTime =  erlang:monotonic_time(),
     DiffTime = erlang:convert_time_unit(EndTime - InitTime, native, microsecond),
-    logger:append_data(io_lib:fwrite("exec ~p~n", [DiffTime])),
+    log:append_data(io_lib:fwrite("exec ~p~n", [DiffTime])),
     slave:stop(TracingNode),
     PidAnswer!{[]}.
 
@@ -125,7 +125,7 @@ instrument_and_reload_gen(ModName, Dir, CompileOpts, Msg, TracingNode) ->
         end,
         EndTime =  erlang:monotonic_time(),
         DiffTime = erlang:convert_time_unit(EndTime - InitTime, native, microsecond),
-        logger:append_data(io_lib:fwrite("comp ~p ~p~n", [FilePath, DiffTime])),
+        log:append_data(io_lib:fwrite("comp ~p ~p~n", [FilePath, DiffTime])),
         % io:format("~p\n", [get_file_path(ModName, Dir)]),
         % io:format("~p\n", [filename:find_src(ModName)]),
         % io:format("~p\n", [ file:get_cwd()]),
