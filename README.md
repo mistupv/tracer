@@ -21,7 +21,7 @@ The `tracer:trace/3` functions has the following parameters:
 
 The `tracer:trace/2` function is equivalent to `tracer:trace/3` with default values.
 
-####Stamp mode
+### Stamp mode
 
 `StampMode` can have two possible values:
 + `"central"`: there is a central authority that distributes the stamp, it can always be considered safe.
