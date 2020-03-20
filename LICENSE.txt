@@ -1,6 +1,6 @@
 MIT License
 
-Copyright (c) 2018 Ivan Lanese, Adrian Palacios and German Vidal
+Copyright (c) 2018 Ivan Lanese, Adrian Palacios, German Vidal and Giovanni Fabbretti.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
