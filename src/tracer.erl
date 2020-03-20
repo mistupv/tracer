@@ -97,6 +97,7 @@ trace_1(InitialCall, PidAnswer, Opts) ->
     EndTime =  erlang:monotonic_time(),
     DiffTime = erlang:convert_time_unit(EndTime - InitTime, native, microsecond),
     log:append_data(io_lib:fwrite("exec ~p~n", [DiffTime])),
+    dbg:stop(),
     slave:stop(TracingNode),
     Trace =
         receive
@@ -139,7 +140,7 @@ trace_manager(PidMain, RunningProcs, Trace, Loaded) ->
                              log:append_pid_data(LogHandler, Trace, IdlePid),
                              log:stop_log_file(LogHandler)
                          end || IdlePid <- IdlePids],
-                     trace_manager(PidMain, [], Trace, Loaded);
+                     PidMain ! {trace, Trace};
                  Other -> io:format("Unexpected message: ~p~n", [Other])
              end
     end.
