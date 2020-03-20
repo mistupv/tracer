@@ -7,6 +7,7 @@ parse_transform(Forms, Opts) ->
 	put(modules_to_instrument, hd([InsMod0 || {inst_mod, InsMod0} <- Opts])),
 	put(cur_dir, hd([Dir0 || {i, Dir0} <- Opts])),
 	put(free, 0),
+	put(stamp_mode, proplists:get_value(stamp_mode, Opts)),
 	ModFileName =
 		lists:sort(
 			lists:flatten(
@@ -15,15 +16,15 @@ parse_transform(Forms, Opts) ->
 						fun get_module_filename/2,
 						[],
 						Form)
-				|| Form <- Forms])),
+					|| Form <- Forms])),
 	NForms =
 		[
 			erl_syntax_lib:map(
-				 fun(CForm) ->
-				 	inst_fun(CForm, ModFileName)
-				 end,
-				 Form)
-		|| Form <- Forms],
+				fun(CForm) ->
+					inst_fun(CForm, ModFileName)
+				end,
+				Form)
+			|| Form <- Forms],
 	RForms = erl_syntax:revert_forms(NForms),
 	% {file_name,{tree,string,{attr,0,[],none},FileName}} = hd(ModFileName),
 	% {ok, File} = file:open("./inst_" ++ FileName, [write]),
@@ -45,7 +46,7 @@ get_module_filename(T, Acc) ->
 							ModName =
 								hd(erl_syntax:attribute_arguments(T)),
 							[{file_name, erl_syntax:string(atom_to_list(erl_syntax:atom_value(ModName)) ++ ".erl") },
-							 {module_name, ModName} | Acc];
+								{module_name, ModName} | Acc];
 						_ ->
 							Acc
 					end;
@@ -88,7 +89,7 @@ inst_expr(T) ->
 					'!' ->
 						inst_send(T,
 							[erl_syntax:infix_expr_left(T),
-							 erl_syntax:infix_expr_right(T)]);
+								erl_syntax:infix_expr_right(T)]);
 					_ ->
 						T
 				end;
@@ -134,56 +135,56 @@ inst_call_loading(T, _ModName) ->
 	T.
 % Uncomment for module loading support
 % inst_call_loading(T, ModName) ->
-	% erl_syntax:case_expr(
-	% 	erl_syntax:application(
-	% 		erl_syntax:atom(code),
-	% 		erl_syntax:atom(where_is_file),
-	% 		[erl_syntax:list([erl_syntax:string(get(cur_dir))]),
-	% 		erl_syntax:infix_expr(
-	% 				erl_syntax:application(
-	% 					erl_syntax:atom(erlang),
-	% 					erl_syntax:atom(atom_to_list),
-	% 					[ModName]),
-	% 				erl_syntax:operator("++"),
-	% 				erl_syntax:string(".erl"))]),
-	% 	[
-	% 		% TODO: try to load also from src directory
-	% 		erl_syntax:clause(
-	% 			[erl_syntax:atom(non_existing)],
-	% 			[],
-	% 			[
-	% 				erl_syntax:case_expr(
-	% 					erl_syntax:application(
-	% 						erl_syntax:atom(lists),
-	% 						erl_syntax:atom(member),
-	% 						[ModName,
-	% 						 lists_with_modules_to_instument()]),
-	% 					[
-	% 						erl_syntax:clause(
-	% 							[erl_syntax:atom(true)] ,
-	% 							[],
-	% 							[
-	% 								build_send_load(ModName),
-	% 								build_receive_load(),
-	% 								T
-	% 							]),
-	% 						erl_syntax:clause(
-	% 							[erl_syntax:atom(false)] ,
-	% 							[],
-	% 							[
-	% 								T
-	% 							])
-	% 					])
-	% 			]),
-	% 		erl_syntax:clause(
-	% 			[erl_syntax:underscore()] ,
-	% 			[],
-	% 			[
-	% 				build_send_load(ModName),
-	% 				build_receive_load(),
-	% 				T
-	% 			])
-	% 	]).
+% erl_syntax:case_expr(
+% 	erl_syntax:application(
+% 		erl_syntax:atom(code),
+% 		erl_syntax:atom(where_is_file),
+% 		[erl_syntax:list([erl_syntax:string(get(cur_dir))]),
+% 		erl_syntax:infix_expr(
+% 				erl_syntax:application(
+% 					erl_syntax:atom(erlang),
+% 					erl_syntax:atom(atom_to_list),
+% 					[ModName]),
+% 				erl_syntax:operator("++"),
+% 				erl_syntax:string(".erl"))]),
+% 	[
+% 		% TODO: try to load also from src directory
+% 		erl_syntax:clause(
+% 			[erl_syntax:atom(non_existing)],
+% 			[],
+% 			[
+% 				erl_syntax:case_expr(
+% 					erl_syntax:application(
+% 						erl_syntax:atom(lists),
+% 						erl_syntax:atom(member),
+% 						[ModName,
+% 						 lists_with_modules_to_instument()]),
+% 					[
+% 						erl_syntax:clause(
+% 							[erl_syntax:atom(true)] ,
+% 							[],
+% 							[
+% 								build_send_load(ModName),
+% 								build_receive_load(),
+% 								T
+% 							]),
+% 						erl_syntax:clause(
+% 							[erl_syntax:atom(false)] ,
+% 							[],
+% 							[
+% 								T
+% 							])
+% 					])
+% 			]),
+% 		erl_syntax:clause(
+% 			[erl_syntax:underscore()] ,
+% 			[],
+% 			[
+% 				build_send_load(ModName),
+% 				build_receive_load(),
+% 				T
+% 			])
+% 	]).
 
 inst_fun_clauses(Clauses, _FunId) ->
 	[
@@ -192,23 +193,58 @@ inst_fun_clauses(Clauses, _FunId) ->
 				erl_syntax:clause_body(
 					erl_syntax_lib:map(
 						fun inst_expr/1, Clause )),
-		 	erl_syntax:clause(
-					erl_syntax:clause_patterns(Clause),
-					erl_syntax:clause_guard(Clause),
-					NBody0)
-		 end
-	 || Clause <- Clauses].
+			erl_syntax:clause(
+				erl_syntax:clause_patterns(Clause),
+				erl_syntax:clause_guard(Clause),
+				NBody0)
+		end
+		|| Clause <- Clauses].
 
 inst_send(_T, SendArgs) ->
-
 	{VarArgs, StoreArgs} =
 		args_assign("TRCSendArg", SendArgs),
 
 	SndVarArg = lists:nth(2, VarArgs),
 
+	case get(stamp_mode) of
+		"distributed" -> inst_send_dist_stamp(_T, VarArgs, StoreArgs);
+		"central" -> inst_send_central_stamp(_T, VarArgs, SndVarArg, StoreArgs)
+	end.
+
+% @doc
+% when the option 'stamp_mode' is central the code will ask for a unique integer
+% that will act as a stamp, the message is sent to a non-existent node but thanks to the dbg
+% server (see tracer:trace_handler/2) we will be able to intercept the request and provide the stamp
+% doc@
+inst_send_central_stamp(_T, VarArgs, SndVarArg, StoreArgs) ->
+	SendSend =
+		build_send_trace(
+			send_sent),
+
+	{RecStamp, StampVar} =
+		build_rec_stamp(),
+
+	SendWithStamp =
+		build_send_stamp(
+			hd(VarArgs),
+			SndVarArg,
+			StampVar),
+
+	BlockSend =
+		erl_syntax:block_expr(StoreArgs ++ [SendSend, RecStamp, SendWithStamp, SndVarArg]),
+	BlockSend.
+
+% @doc
+% when the option 'stamp_mode' is distributed the stamp will be automatically generated
+% by the send through the BIF unique_integer
+% doc@
+inst_send_dist_stamp(_T, VarArgs, StoreArgs) ->
+
+	SndVarArg = lists:nth(2, VarArgs),
+
 	Stamp = erl_syntax:tuple([erl_syntax:atom(stamp),
-												   erl_syntax:application(erl_syntax:atom(erlang), erl_syntax:atom(unique_integer), [])]
-													),
+		erl_syntax:application(erl_syntax:atom(erlang), erl_syntax:atom(unique_integer), [])]
+	),
 
 	SendWithStamp =
 		build_send_stamp(
@@ -219,6 +255,47 @@ inst_send(_T, SendArgs) ->
 	BlockSend = erl_syntax:block_expr(StoreArgs ++ [SendWithStamp]),
 	BlockSend.
 
+build_rec_stamp() ->
+	StampVar = free_named_var("Stamp"),
+	RecExpr =
+		erl_syntax:receive_expr(
+			[
+				erl_syntax:clause(
+					[
+						erl_syntax:tuple(
+							[
+								erl_syntax:atom(recv_stamp),
+								StampVar
+							])
+					],
+					[],
+					[erl_syntax:atom(ok)]
+
+				)
+			]),
+	{RecExpr, erl_syntax:tuple(
+		[
+			erl_syntax:atom(stamp),
+			StampVar
+		])}.
+
+build_send(Msg) ->
+	build_send_par(
+		erl_syntax:tuple([
+			erl_syntax:atom(non_existent),
+			erl_syntax:atom(node())
+		]),
+		[erl_syntax:tuple(Msg)]).
+
+build_send_trace(Tag) ->
+	build_send(
+		[
+			erl_syntax:atom(Tag),
+			erl_syntax:application(
+				erl_syntax:atom(erlang) ,
+				erl_syntax:atom(self),
+				[])
+		] ).
 
 inst_receive_clause(Clause, InstInfo) ->
 	{CurrentClause, StampVar} = InstInfo,
@@ -254,9 +331,9 @@ build_send_stamp(Pid, Msg, Stamp) ->
 	build_send_par(
 		Pid,
 		[erl_syntax:tuple([
-			                 Stamp,
-											 Msg
-											])
+			Stamp,
+			Msg
+		])
 		]).
 
 % build_receive_load() ->
@@ -284,13 +361,13 @@ free_named_var(NameRoot) ->
 args_assign(NameRoot, Args) ->
 	lists:unzip(
 		[ begin
-			VarArg =
-				free_named_var(NameRoot),
-			StoreArg =
-				erl_syntax:match_expr(VarArg, Arg),
-			{VarArg, StoreArg}
-		 end
-		|| Arg <- Args] ).
+				VarArg =
+					free_named_var(NameRoot),
+				StoreArg =
+					erl_syntax:match_expr(VarArg, Arg),
+				{VarArg, StoreArg}
+			end
+			|| Arg <- Args] ).
 
 % lists_with_modules_to_instument() ->
 % 	erl_syntax:list(

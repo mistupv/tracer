@@ -1,9 +1,6 @@
 -module(tracer).
 
--export([trace/2, trace/3, test/0]).
-
-test() ->
-    trace("acknowledge:main()", self(), [{dir,"examples"},{log_dir,"acknowledge_results"}]).
+-export([trace/2, trace/3]).
 
 trace(InitialCall, PidAnswer) ->
     trace(InitialCall, PidAnswer, []).
@@ -29,7 +26,12 @@ trace(InitialCall, PidAnswer, Opts) ->
             true -> NOpts2;
             false -> [{log_dir, "trace"} | NOpts2]
         end,
-    trace_1(InitialCall, PidAnswer, NOpts3).
+    NOpts4 =
+        case proplists:is_defined(stamp_mode, NOpts3) of
+            true -> NOpts3;
+            false -> [{stamp_mode, "central"} | NOpts3]
+        end,
+    trace_1(InitialCall, PidAnswer, NOpts4).
 
 trace_1(InitialCall, PidAnswer, Opts) ->
     ModName = get_mod_name(InitialCall),
@@ -42,15 +44,16 @@ trace_1(InitialCall, PidAnswer, Opts) ->
     Dir     = proplists:get_value(dir,     Opts),
     Mods    = proplists:get_value(mods,    Opts),
     LogDir  = proplists:get_value(log_dir, Opts),
+    StampMode = proplists:get_value(stamp_mode, Opts),
     put(modules_to_instrument, Mods),
     LogHandler = log:init_log_dir(LogDir),
     put(log_handler, LogHandler),
     log:append_data(io_lib:fwrite("call ~p~n", [InitialCall])),
     % io:format("~p\n", [SO]),
     % io:format("~p\n~p\n", [ModName, Dir]),
-    % OriginalLibCode = 
+    % OriginalLibCode =
     %     [code:get_object_code(Mod) || Mod <- [gen_server, supervisor, gen_fsm, proc_lib, gen]],
-    instrument_and_reload(ModName, Dir, TracingNode),
+    instrument_and_reload(ModName, Dir, TracingNode, StampMode),
     PidMain = self(),
     PidCall = execute_call(InitialCall, self(), Dir, TracingNode),
     SPidCall = log:slpid(PidCall),
@@ -114,6 +117,10 @@ human_readable_stamp(Map, Stamp) ->
         HRStamp -> {Map, HRStamp}
     end.
 
+% @doc
+% keeps a copy of trace and running process, it's useful when we reach a timeout and we need to
+% dump the trace of eventual process(es) still running
+% doc@
 trace_manager(PidMain, RunningProcs, Trace, Loaded) ->
 
     case RunningProcs of
@@ -141,15 +148,19 @@ trace_handler(TraceItem, {StampMap, Trace, Loaded, PidManager, Dir, LogDir, Trac
 
     {NStampMap, NTraceItem} =
         case TraceItem of
-            {trace, Pid, 'receive' , Message} when is_tuple(Message) ->
+            {trace, Pid, 'receive' , {recv_stamp, _}} -> {StampMap, none}; % avoid the message with the stamp provided from the "authority"
+            {trace, Pid, 'receive' , Message} when is_tuple(Message)  ->
                 SPid = log:slpid(Pid),
                 Stamp = proplists:get_value(stamp, tuple_to_list(Message)),
                 {_NStampMap, HRStamp} = human_readable_stamp(StampMap, Stamp),
                 {_NStampMap, {SPid, 'receive', HRStamp}};
+            {trace, Pid, send, {send_sent, Pid}, _} -> % act as a central authority for the stamp
+                Pid ! {recv_stamp, erlang:unique_integer()},
+                {StampMap, none};
             {trace, Pid, send, Message, _} when is_tuple(Message) ->
                 SPid = log:slpid(Pid),
                 case proplists:get_value(stamp, tuple_to_list(Message), not_found) of
-                    not_found -> {StampMap, Trace}; %exclude the message for result
+                    not_found -> {StampMap, none}; %exclude the message for result
                     Stamp -> {_NStampMap, HRStamp} = human_readable_stamp(StampMap, Stamp),
                              {_NStampMap, {SPid, send, HRStamp}}
                 end;
@@ -157,9 +168,10 @@ trace_handler(TraceItem, {StampMap, Trace, Loaded, PidManager, Dir, LogDir, Trac
                 SPid = log:slpid(ParentPid),
                 SSPid = log:slpid(SpawnPid),
                 {StampMap, {SPid, spawn, SSPid}};
-            _ -> {StampMap, Trace}
+            _ -> {StampMap, none}
         end,
 
+    % we are interested to add just send, spawn and receive other messages will be excluded from the trace
     NTrace =
         case NTraceItem of
             none -> Trace;
@@ -192,7 +204,7 @@ setup_debug_server(TracingNode, ProcessPid, TracerState) ->
     dbg:tracer(process, {fun trace_handler/2, TracerState}), % starting the server for debugging
 
     dbg:n(TracingNode), % adding the node to the list of node controlled by the dbg
-    dbg:p(ProcessPid, [m, sos, p]). % m means tracing messages, sos means set on spawn
+    dbg:p(ProcessPid, [m, sos, p]). % m means tracing messages, sos means set on spawn, p stands for process
 
 send_module(TracingNode, Module, Dir) ->
     CompileOpts =
@@ -205,7 +217,6 @@ send_module(TracingNode, Module, Dir) ->
         rpc:call(
             TracingNode, code, load_binary, [Module, File, Bin]),
     ok.
-
 
 execute_call(Call, PidParent, _Dir, TracingNode) ->
     send_module(TracingNode, ?MODULE, filename:absname(filename:dirname(code:which(?MODULE)) ++ "/..") ++ "/src"),
@@ -221,7 +232,7 @@ execute_call(Call, PidParent, _Dir, TracingNode) ->
                                         start -> ok
                                     end,
                                     try MainRes = " ++ Call ++
-                    ",MainRes catch E1:E2 -> {E1,E2} end."),
+                                    ",MainRes catch E1:E2 -> {E1,E2} end."),
             smerl:compile(M2,[nowarn_format]),
             Res = foo:bar(),
             PidParent!{result,Res}
@@ -247,9 +258,9 @@ get_file_path(ModName, Dir) ->
             Dir ++ "/" ++ atom_to_list(ModName) ++ ".erl"
     end.
 
-instrument_and_reload(ModName, Dir, TracingNode) ->
+instrument_and_reload(ModName, Dir, TracingNode, StampMode) ->
     CompileOpts =
-        [{parse_transform, trace_pt}, binary, {i,Dir}, {outdir,Dir}, return, {inst_mod, get(modules_to_instrument)}],
+        [{parse_transform, trace_pt}, {stamp_mode, StampMode}, binary, {i,Dir}, {outdir,Dir}, return, {inst_mod, get(modules_to_instrument)}],
     Msg =
         "Instrumenting...",
     instrument_and_reload_gen(ModName, Dir, CompileOpts, Msg, TracingNode).
