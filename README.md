@@ -17,8 +17,15 @@ The `tracer:trace/3` functions has the following parameters:
     * `{timeout, Timeout}`: The number of miliseconds that the tracer has to run for (`10000` by default).
     * `{dir, Dir}`: The directory where the tracer has to look for modules (`"."` by default).
     * `{log_dir, LogDir}`: The directory where the tracer stores the tracing results (`"trace"` by default).
+    * `{stamp_mode, StampMode}`: The policy through which stamps in messages are managed (`"central"` by default).
 
 The `tracer:trace/2` function is equivalent to `tracer:trace/3` with default values.
+
+####Stamp mode
+
+`StampMode` can have two possible values:
++ `"central"`: there is a central authority that distributes the stamp, it can always be considered safe.
++ `"distributed"`: every `send` generates its own stamp, more lightweight but safe only if one system instance is involved.
 
 ### Example
 Suppose that we want to trace a call to the module `tcp.erl` that is in the `examples/` folder and we would also like to store the results in a new folder called `tcp_results/`. Then, we should call the tracer as:
