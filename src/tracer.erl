@@ -83,16 +83,17 @@ trace_1(InitialCall, PidAnswer, Opts) ->
                     log:append_data(io_lib:fwrite("result ~p~n", [Result]))
             end
     after
-        Timeout ->
-            PidManager ! idle,
-            log:append_data(io_lib:fwrite("tracing timeout~n", [])),
-            receive
-                {result,Result} ->
-                    log:append_data(io_lib:fwrite("result ~p~n", [Result]))
-            after
-                0 ->
-                    log:append_data(io_lib:fwrite("result none~n", []))
-            end
+      Timeout ->
+        PidManager ! {idle, self()},
+        receive {PidManager, done} -> ok end,
+        log:append_data(io_lib:fwrite("tracing timeout~n", [])),
+        receive
+          {result,Result} ->
+            log:append_data(io_lib:fwrite("result ~p~n", [Result]))
+        after
+          0 ->
+            log:append_data(io_lib:fwrite("result none~n", []))
+        end
     end,
     EndTime =  erlang:monotonic_time(),
     DiffTime = erlang:convert_time_unit(EndTime - InitTime, native, microsecond),
@@ -132,7 +133,7 @@ trace_manager(PidMain, RunningProcs, Trace, Loaded) ->
         _ -> receive
                  {update, NRunningProcs, NTrace, NLoaded} ->
                      trace_manager(PidMain, NRunningProcs, NTrace, NLoaded);
-                 idle ->
+                 {idle, PidMain}  ->
                      IdlePids = [Pid || {Pid, _} <- RunningProcs],
                      [
                          begin
@@ -140,37 +141,33 @@ trace_manager(PidMain, RunningProcs, Trace, Loaded) ->
                              log:append_pid_data(LogHandler, Trace, IdlePid),
                              log:stop_log_file(LogHandler)
                          end || IdlePid <- IdlePids],
-                     PidMain ! {trace, Trace};
+                 PidMain ! {done, self()},
+                 PidMain ! {trace, Trace};
                  Other -> io:format("Unexpected message: ~p~n", [Other])
              end
     end.
 
 trace_handler(TraceItem, {StampMap, Trace, Loaded, PidManager, Dir, LogDir, TracingNode, RunningProcs}) ->
 
-    {NStampMap, NTraceItem} =
-        case TraceItem of
-            {trace, Pid, 'receive' , {recv_stamp, _}} -> {StampMap, none}; % avoid the message with the stamp provided from the "authority"
-            {trace, Pid, 'receive' , Message} when is_tuple(Message)  ->
-                SPid = log:slpid(Pid),
-                Stamp = proplists:get_value(stamp, tuple_to_list(Message)),
-                {_NStampMap, HRStamp} = human_readable_stamp(StampMap, Stamp),
-                {_NStampMap, {SPid, 'receive', HRStamp}};
-            {trace, Pid, send, {send_sent, Pid}, _} -> % act as a central authority for the stamp
-                Pid ! {recv_stamp, erlang:unique_integer()},
-                {StampMap, none};
-            {trace, Pid, send, Message, _} when is_tuple(Message) ->
-                SPid = log:slpid(Pid),
-                case proplists:get_value(stamp, tuple_to_list(Message), not_found) of
-                    not_found -> {StampMap, none}; %exclude the message for result
-                    Stamp -> {_NStampMap, HRStamp} = human_readable_stamp(StampMap, Stamp),
-                             {_NStampMap, {SPid, send, HRStamp}}
-                end;
-            {trace, ParentPid, spawn, SpawnPid, _} ->
-                SPid = log:slpid(ParentPid),
-                SSPid = log:slpid(SpawnPid),
-                {StampMap, {SPid, spawn, SSPid}};
-            _ -> {StampMap, none}
-        end,
+  {NStampMap, NTraceItem} =
+    case TraceItem of
+      {trace, Pid, 'receive' , {{stamp, Stamp}, _Message}} ->
+        SPid = log:slpid(Pid),
+        {_NStampMap, HRStamp} = human_readable_stamp(StampMap, Stamp),
+        {_NStampMap, {SPid, 'receive', HRStamp}};
+      {trace, Pid, send, {send_sent, Pid}, _} -> % act as a central authority for the stamp
+        Pid ! {recv_stamp, erlang:unique_integer()},
+        {StampMap, none};
+      {trace, Pid, send, {{stamp, Stamp}, _Message}, _} ->
+        SPid = log:slpid(Pid),
+        {_NStampMap, HRStamp} = human_readable_stamp(StampMap, Stamp),
+        {_NStampMap, {SPid, send, HRStamp}};
+      {trace, ParentPid, spawn, SpawnPid, _} ->
+        SPid = log:slpid(ParentPid),
+        SSPid = log:slpid(SpawnPid),
+        {StampMap, {SPid, spawn, SSPid}};
+      _ -> {StampMap, none}
+    end,
 
     % we are interested to add just send, spawn and receive other messages will be excluded from the trace
     NTrace =
