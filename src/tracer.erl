@@ -141,7 +141,7 @@ trace_manager(PidMain, RunningProcs, Trace, Loaded) ->
                              log:append_pid_data(LogHandler, Trace, IdlePid),
                              log:stop_log_file(LogHandler)
                          end || IdlePid <- IdlePids],
-                 PidMain ! {done, self()},
+                 PidMain ! {self(), done},
                  PidMain ! {trace, Trace};
                  Other -> io:format("Unexpected message: ~p~n", [Other])
              end
