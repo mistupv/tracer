@@ -25,6 +25,7 @@ parse_transform(Forms, Opts) ->
 				end,
 				Form)
 			|| Form <- Forms],
+
 	RForms = erl_syntax:revert_forms(NForms),
 	% {file_name,{tree,string,{attr,0,[],none},FileName}} = hd(ModFileName),
 	% {ok, File} = file:open("./inst_" ++ FileName, [write]),
@@ -94,8 +95,7 @@ inst_expr(T) ->
 						T
 				end;
 			application ->
-				AppOper =
-					erl_syntax:application_operator(T),
+				AppOper = erl_syntax:application_operator(T),
 				NApp =
 					case erl_syntax:type(AppOper) of
 						module_qualifier ->
@@ -107,6 +107,8 @@ inst_expr(T) ->
 								case {erl_syntax:atom_value(ModName), erl_syntax:atom_value(FunName)} of
 									{erlang, send} ->
 										inst_send(T, erl_syntax:application_arguments(T));
+                  {erlang, nodes} ->
+                    inst_nodes(T);
 									_ ->
 										inst_call_loading(T, ModName)
 								end
@@ -114,6 +116,11 @@ inst_expr(T) ->
 								_:_ ->
 									inst_call_loading(T, ModName)
 							end;
+            atom ->
+              case erl_syntax:atom_value(AppOper) of
+                nodes -> inst_nodes(T);
+                _     -> T
+              end;
 						variable ->
 							T;
 						fun_expr ->
@@ -219,7 +226,7 @@ inst_send(_T, SendArgs) ->
 inst_send_central_stamp(_T, VarArgs, SndVarArg, StoreArgs) ->
 	SendSend =
 		build_send_trace(
-			send_sent),
+			send_sent, []),
 
 	{RecStamp, StampVar} =
 		build_rec_stamp(),
@@ -287,22 +294,28 @@ build_send(Msg) ->
 		]),
 		[erl_syntax:tuple(Msg)]).
 
-build_send_trace(Tag) ->
+build_send_trace(Tag, Args) ->
 	build_send(
 		[
 			erl_syntax:atom(Tag),
 			erl_syntax:application(
 				erl_syntax:atom(erlang) ,
 				erl_syntax:atom(self),
-				[])
-		] ).
+				[]),
+     erl_syntax:tuple(Args)
+		]).
 
 inst_receive_clause(Clause, InstInfo) ->
 	{CurrentClause, StampVar} = InstInfo,
 	{ [_VarMsg], Patterns} =
 		args_assign("TRCMsg", erl_syntax:clause_patterns(Clause)),
 
-	NBody = erl_syntax:clause_body(Clause),
+  SendEvaluated =
+		build_send_trace(
+			receive_evaluated,
+			[StampVar]),
+
+	NBody = [SendEvaluated] ++ erl_syntax:clause_body(Clause),
 
 	NPatterns = [erl_syntax:tuple([StampVar| Patterns])],
 
@@ -349,6 +362,16 @@ build_send_stamp(Pid, Msg, Stamp) ->
 % 			)
 % 		]
 % 	) .
+
+inst_nodes(_T) ->
+  AppNodes = erl_syntax:application(
+               erl_syntax:atom(erlang),
+               erl_syntax:atom(nodes),
+               []
+              ),
+	SendNodes = build_send([erl_syntax:atom(log_nodes),AppNodes]),
+  SendNodes.
+
 
 get_free() ->
 	Free = get(free),

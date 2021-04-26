@@ -36,10 +36,10 @@ trace(InitialCall, PidAnswer, Opts) ->
 trace_1(InitialCall, PidAnswer, Opts) ->
     ModName = get_mod_name(InitialCall),
     {ok, TracingNode} =
-        slave:start(
-            list_to_atom(net_adm:localhost()),
-            tracing,
-            "-setcookie cookie"),
+        slave:start_link(
+          list_to_atom(net_adm:localhost()),
+          tracing,
+          "-setcookie cookie"),
     Timeout = proplists:get_value(timeout, Opts),
     Dir     = proplists:get_value(dir,     Opts),
     Mods    = proplists:get_value(mods,    Opts),
@@ -49,29 +49,33 @@ trace_1(InitialCall, PidAnswer, Opts) ->
     LogHandler = log:init_log_dir(LogDir),
     put(log_handler, LogHandler),
     log:append_data(io_lib:fwrite("call ~p~n", [InitialCall])),
-    % io:format("~p\n", [SO]),
-    % io:format("~p\n~p\n", [ModName, Dir]),
-    % OriginalLibCode =
-    %     [code:get_object_code(Mod) || Mod <- [gen_server, supervisor, gen_fsm, proc_lib, gen]],
+                                                % io:format("~p\n", [SO]),
+                                                % io:format("~p\n~p\n", [ModName, Dir]),
+                                                % OriginalLibCode =
+                                                %     [code:get_object_code(Mod) || Mod <- [gen_server, supervisor, gen_fsm, proc_lib, gen]],
     instrument_and_reload(ModName, Dir, TracingNode, StampMode),
     PidMain = self(),
     PidCall = execute_call(InitialCall, self(), Dir, TracingNode),
     SPidCall = log:slpid(PidCall),
     log:append_data(io_lib:fwrite("main_pid ~p~n", [SPidCall])),
+    case proplists:get_value(distributed, Opts, false) of
+        true -> log:append_data(io_lib:fwrite("main_node ~p~n", [TracingNode]));
+        false -> log:append_data(io_lib:fwrite("main_node nonode@nohost~n", []))
+    end,
     RunningProcs = [{PidCall, log:init_log_file(LogDir, PidCall)}],
     InstMod = get(modules_to_instrument),
-    PidManager = spawn(fun() -> trace_manager(PidMain, RunningProcs,[], [ModName]) end),
+    PidManager = spawn(fun() -> trace_manager(PidMain, RunningProcs,[]) end),
     PidTrace =
         spawn(
-            fun() ->
-                put(modules_to_instrument, InstMod),
-                put(log_handler, LogHandler),
-                receive
-                    setup_complete ->
-                        setup_debug_server(TracingNode, PidCall, {#{}, [], [ModName], PidManager, Dir, LogDir, TracingNode, RunningProcs}),
-                        PidCall!start
-                end
-            end),
+          fun() ->
+                  put(modules_to_instrument, InstMod),
+                  put(log_handler, LogHandler),
+                  receive
+                      setup_complete ->
+                          setup_debug_server(TracingNode, PidCall, {#{}, [], PidManager, LogDir, RunningProcs, #{}}),
+                          PidCall!start
+                  end
+          end),
     register(tracer, PidTrace),
 
     InitTime = erlang:monotonic_time(),
@@ -83,17 +87,17 @@ trace_1(InitialCall, PidAnswer, Opts) ->
                     log:append_data(io_lib:fwrite("result ~p~n", [Result]))
             end
     after
-      Timeout ->
-        PidManager ! {idle, self()},
-        receive {PidManager, done} -> ok end,
-        log:append_data(io_lib:fwrite("tracing timeout~n", [])),
-        receive
-          {result,Result} ->
-            log:append_data(io_lib:fwrite("result ~p~n", [Result]))
-        after
-          0 ->
-            log:append_data(io_lib:fwrite("result none~n", []))
-        end
+        Timeout ->
+            PidManager ! {idle, self()},
+            receive {PidManager, done} -> ok end,
+            log:append_data(io_lib:fwrite("tracing timeout~n", [])),
+            receive
+                {result,Result} ->
+                    log:append_data(io_lib:fwrite("result ~p~n", [Result]))
+            after
+                0 ->
+                    log:append_data(io_lib:fwrite("result none~n", []))
+            end
     end,
     EndTime =  erlang:monotonic_time(),
     DiffTime = erlang:convert_time_unit(EndTime - InitTime, native, microsecond),
@@ -105,71 +109,91 @@ trace_1(InitialCall, PidAnswer, Opts) ->
             {trace,Trace0} ->
                 lists:reverse(Trace0)
         end,
-    % Loaded = % Commented to avoid warning
-    %receive
-    %    {loaded,Loaded0} ->
-    %        Loaded0
-    %end,
+    %% Loaded = % Commented to avoid warning
+    %%receive
+    %%    {loaded,Loaded0} ->
+    %%        Loaded0
+    %%end,
     PidAnswer!{Trace}.
 
 human_readable_stamp(Map, Stamp) ->
     case maps:get(Stamp, Map, not_found) of
         not_found -> HRStamp = get_stamp(),
-            { maps:put(Stamp, HRStamp, Map), HRStamp};
+                     { maps:put(Stamp, HRStamp, Map), HRStamp};
         HRStamp -> {Map, HRStamp}
     end.
 
-% @doc
-% keeps a copy of trace and running process, it's useful when we reach a timeout and we need to
-% dump the trace of eventual process(es) still running
-% doc@
-trace_manager(PidMain, RunningProcs, Trace, Loaded) ->
+                                                % @doc
+                                                % keeps a copy of trace and running process, it's useful when we reach a timeout and we need to
+                                                % dump the trace of eventual process(es) still running
+                                                % doc@
+trace_manager(PidMain, RunningProcs, Trace) ->
 
     case RunningProcs of
         [] ->
             PidMain ! all_done,
             PidMain ! {trace, Trace};
-            %PidMain ! {loaded, Loaded};
+                                                %PidMain ! {loaded, Loaded};
         _ -> receive
-                 {update, NRunningProcs, NTrace, NLoaded} ->
-                     trace_manager(PidMain, NRunningProcs, NTrace, NLoaded);
+                 {update, NRunningProcs, NTrace} ->
+                     trace_manager(PidMain, NRunningProcs, NTrace);
                  {idle, PidMain}  ->
                      IdlePids = [Pid || {Pid, _} <- RunningProcs],
                      [
-                         begin
-                             LogHandler = proplists:get_value(IdlePid, RunningProcs),
-                             log:append_pid_data(LogHandler, Trace, IdlePid),
-                             log:stop_log_file(LogHandler)
-                         end || IdlePid <- IdlePids],
-                 PidMain ! {self(), done},
-                 PidMain ! {trace, Trace};
+                      begin
+                          LogHandler = proplists:get_value(IdlePid, RunningProcs),
+                          log:append_pid_data(LogHandler, Trace, IdlePid),
+                          log:stop_log_file(LogHandler)
+                      end || IdlePid <- IdlePids],
+                     PidMain ! {self(), done},
+                     PidMain ! {trace, Trace};
                  Other -> io:format("Unexpected message: ~p~n", [Other])
              end
     end.
 
-trace_handler(TraceItem, {StampMap, Trace, Loaded, PidManager, Dir, LogDir, TracingNode, RunningProcs}) ->
+trace_handler(TraceItem, {StampMap, Trace, PidManager, LogDir, RunningProcs, SlaveStarters}) ->
+    {NStampMap, NTraceItem, NSlaveStarters} =
+        case TraceItem of
+            {trace, Pid, send, {receive_evaluated, Pid, {{stamp, Stamp}}}, _} ->
+                SPid = log:slpid(Pid),
+                {_NStampMap, HRStamp} = human_readable_stamp(StampMap, Stamp),
+                {_NStampMap, {SPid, 'receive', HRStamp}, SlaveStarters};
+            {trace, Pid, send, {send_sent, Pid, {}}, _} -> % act as a central authority for the stamp
+                Pid ! {recv_stamp, erlang:unique_integer()},
+                {StampMap, none, SlaveStarters};
+            {trace, ParentPid, send, {log_nodes, Nodes}, _} -> % act as a central authority for the stamp
+                SPid = log:slpid(ParentPid),
+                {StampMap, {SPid, nodes, {Nodes}}, SlaveStarters};
+            {trace, Pid, send, {{stamp, Stamp}, _Message}, _} ->
+                SPid = log:slpid(Pid),
+                {_NStampMap, HRStamp} = human_readable_stamp(StampMap, Stamp),
+                {_NStampMap, {SPid, send, HRStamp}, SlaveStarters};
+            {trace, ParentPid, spawn, SlavePid, {slave, wait_for_slave, Opts}} -> %Trying to start a node
+                Node = lists:nth(4, Opts),
+                {StampMap, none, maps:put(SlavePid, {ParentPid, Node},SlaveStarters)};
+            {trace, ParentPid, 'receive', {result, {ok, NodeName}}} ->
+                SPid = log:slpid(ParentPid),
+                {StampMap, {SPid, 'start', {succ, NodeName}}, SlaveStarters};
+            {trace, SStarterPid, send, {result, {error, _}}, _} ->
+                case maps:get(SStarterPid, SlaveStarters, not_found) of
+                    not_found             -> {StampMap, none ,SlaveStarters};
+                    {ParentPid, NodeName} ->
+                        SPid = log:slpid(ParentPid),
+                        {StampMap, {SPid, 'start', {fail, NodeName}}, maps:remove(SStarterPid ,SlaveStarters)}
+                end;
+            {trace, ParentPid, spawn, SpawnPid, {erts_internal, crasher, [Node|_]}} ->
+                SPid = log:slpid(ParentPid),
+                SSPid = log:slpid(SpawnPid),
+                {StampMap, {SPid, spawn, {Node, fail, SSPid}}, SlaveStarters};
+            {trace, ParentPid, spawn, SpawnPid, _} ->
+                SPid = log:slpid(ParentPid),
+                SSPid = log:slpid(SpawnPid),
+                {StampMap, {SPid, spawn, {node(SpawnPid), succ, SSPid}}, SlaveStarters};
+            _ ->
+                {StampMap, none, SlaveStarters}
+        end,
 
-  {NStampMap, NTraceItem} =
-    case TraceItem of
-      {trace, Pid, 'receive' , {{stamp, Stamp}, _Message}} ->
-        SPid = log:slpid(Pid),
-        {_NStampMap, HRStamp} = human_readable_stamp(StampMap, Stamp),
-        {_NStampMap, {SPid, 'receive', HRStamp}};
-      {trace, Pid, send, {send_sent, Pid}, _} -> % act as a central authority for the stamp
-        Pid ! {recv_stamp, erlang:unique_integer()},
-        {StampMap, none};
-      {trace, Pid, send, {{stamp, Stamp}, _Message}, _} ->
-        SPid = log:slpid(Pid),
-        {_NStampMap, HRStamp} = human_readable_stamp(StampMap, Stamp),
-        {_NStampMap, {SPid, send, HRStamp}};
-      {trace, ParentPid, spawn, SpawnPid, _} ->
-        SPid = log:slpid(ParentPid),
-        SSPid = log:slpid(SpawnPid),
-        {StampMap, {SPid, spawn, SSPid}};
-      _ -> {StampMap, none}
-    end,
-
-    % we are interested to add just send, spawn and receive other messages will be excluded from the trace
+                                                % we are interested to add just send, spawn and receive other messages will be excluded from the trace
     NTrace =
         case NTraceItem of
             none -> Trace;
@@ -177,8 +201,8 @@ trace_handler(TraceItem, {StampMap, Trace, Loaded, PidManager, Dir, LogDir, Trac
         end,
 
     NRunningProcs =
-        case TraceItem of
-            {trace, PidDone, exit, _Value} ->
+        case {TraceItem, NTraceItem} of
+            {{trace, PidDone, exit, _Value}, _} ->
                 LogHandler = proplists:get_value(PidDone, RunningProcs, not_found),
                 case LogHandler of
                     not_found ->
@@ -188,19 +212,18 @@ trace_handler(TraceItem, {StampMap, Trace, Loaded, PidManager, Dir, LogDir, Trac
                         log:stop_log_file(LogHandler),
                         lists:delete({PidDone, LogHandler}, RunningProcs)
                 end;
-            {trace, _, spawn, ChildPid, _} ->
+            {{trace, _, spawn, ChildPid, _},{_, spawn, {_, succ, _}}} ->
                 LogItem = {ChildPid, log:init_log_file(LogDir, ChildPid)},
                 [LogItem | RunningProcs];
             _ -> RunningProcs
         end,
-
-    PidManager ! {update, NRunningProcs, NTrace, Loaded},
-    {NStampMap, NTrace, Loaded, PidManager, Dir, LogDir, TracingNode, NRunningProcs}.
+                                                %io:format("Running processes: ~p~n", [NRunningProcs]),
+    PidManager ! {update, NRunningProcs, NTrace},
+    {NStampMap, NTrace, PidManager, LogDir, NRunningProcs, NSlaveStarters}.
 
 setup_debug_server(TracingNode, ProcessPid, TracerState) ->
 
     dbg:tracer(process, {fun trace_handler/2, TracerState}), % starting the server for debugging
-
     dbg:n(TracingNode), % adding the node to the list of node controlled by the dbg
     dbg:p(ProcessPid, [m, sos, p]). % m means tracing messages, sos means set on spawn, p stands for process
 
@@ -213,7 +236,7 @@ send_module(TracingNode, Module, Dir) ->
         compile:file(File, CompileOpts),
     {_ResL, _BadNodes} =
         rpc:call(
-            TracingNode, code, load_binary, [Module, File, Bin]),
+          TracingNode, code, load_binary, [Module, File, Bin]),
     ok.
 
 execute_call(Call, PidParent, _Dir, TracingNode) ->
@@ -222,18 +245,18 @@ execute_call(Call, PidParent, _Dir, TracingNode) ->
     MainNodeStr = atom_to_list(node()),
     FUN =
         fun() ->
-            M1 = smerl:new(foo),
-            {ok, M2} =
-                smerl:add_func(M1, "bar() ->
+                M1 = smerl:new(foo),
+                {ok, M2} =
+                    smerl:add_func(M1, "bar() ->
                                     {tracer, '" ++ MainNodeStr ++ "'} ! setup_complete,
-                                    receive
-                                        start -> ok
-                                    end,
-                                    try MainRes = " ++ Call ++
-                                    ",MainRes catch E1:E2 -> {E1,E2} end."),
-            smerl:compile(M2,[nowarn_format]),
-            Res = foo:bar(),
-            PidParent!{result,Res}
+                                   receive
+                                       start -> ok
+                                   end,
+                                   try MainRes = " ++ Call ++
+                           ",MainRes catch E1:E2 -> {E1,E2} end."),
+        smerl:compile(M2,[nowarn_format]),
+        Res = foo:bar(),
+        PidParent!{result,Res}
         end,
     spawn(TracingNode, FUN).
 
