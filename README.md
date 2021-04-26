@@ -18,6 +18,7 @@ The `tracer:trace/3` functions has the following parameters:
     * `{dir, Dir}`: The directory where the tracer has to look for modules (`"."` by default).
     * `{log_dir, LogDir}`: The directory where the tracer stores the tracing results (`"trace"` by default).
     * `{stamp_mode, StampMode}`: The policy through which stamps in messages are managed (`"central"` by default).
+    * `{distributed, DistributedMode}`: Indicates if the system is distributed or not (`"false"` by default).
 
 The `tracer:trace/2` function is equivalent to `tracer:trace/3` with default values.
 
