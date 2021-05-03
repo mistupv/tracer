@@ -154,20 +154,29 @@ trace_manager(PidMain, RunningProcs, Trace) ->
 trace_handler(TraceItem, {StampMap, Trace, PidManager, LogDir, RunningProcs, SlaveStarters}) ->
     {NStampMap, NTraceItem, NSlaveStarters} =
         case TraceItem of
-            {trace, Pid, send, {receive_evaluated, Pid, {{stamp, Stamp}}}, _} ->
-                SPid = log:slpid(Pid),
-                {_NStampMap, HRStamp} = human_readable_stamp(StampMap, Stamp),
-                {_NStampMap, {SPid, 'receive', HRStamp}, SlaveStarters};
+            % Generate stamp
             {trace, Pid, send, {send_sent, Pid, {}}, _} -> % act as a central authority for the stamp
                 Pid ! {recv_stamp, erlang:unique_integer()},
                 {StampMap, none, SlaveStarters};
-            {trace, ParentPid, send, {log_nodes, Nodes}, _} -> % act as a central authority for the stamp
-                SPid = log:slpid(ParentPid),
-                {StampMap, {SPid, nodes, {Nodes}}, SlaveStarters};
+            % Send message
             {trace, Pid, send, {{stamp, Stamp}, _Message}, _} ->
                 SPid = log:slpid(Pid),
                 {_NStampMap, HRStamp} = human_readable_stamp(StampMap, Stamp),
                 {_NStampMap, {SPid, send, HRStamp}, SlaveStarters};
+            % Deliver message
+            {trace, Pid, 'receive', {{stamp, Stamp}, _Message}} ->
+                SPid = log:slpid(Pid),
+                {_NStampMap, HRStamp} = human_readable_stamp(StampMap, Stamp),
+                {_NStampMap, {SPid, deliver, HRStamp}, SlaveStarters};
+            % Receive message
+            {trace, Pid, send, {receive_evaluated, Pid, {{stamp, Stamp}}}, _} ->
+                SPid = log:slpid(Pid),
+                {_NStampMap, HRStamp} = human_readable_stamp(StampMap, Stamp),
+                {_NStampMap, {SPid, 'receive', HRStamp}, SlaveStarters};
+
+            {trace, ParentPid, send, {log_nodes, Nodes}, _} -> % act as a central authority for the stamp
+                SPid = log:slpid(ParentPid),
+                {StampMap, {SPid, nodes, {Nodes}}, SlaveStarters};
             {trace, ParentPid, spawn, SlavePid, {slave, wait_for_slave, Opts}} -> %Trying to start a node
                 Node = lists:nth(4, Opts),
                 {StampMap, none, maps:put(SlavePid, {ParentPid, Node},SlaveStarters)};
