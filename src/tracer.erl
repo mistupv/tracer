@@ -38,8 +38,7 @@ trace_1(InitialCall, PidAnswer, Opts) ->
     {ok, TracingNode} =
         slave:start_link(
           list_to_atom(net_adm:localhost()),
-          tracing,
-          "-setcookie cookie"),
+          tracing),
     Timeout = proplists:get_value(timeout, Opts),
     Dir     = proplists:get_value(dir,     Opts),
     Mods    = proplists:get_value(mods,    Opts),
